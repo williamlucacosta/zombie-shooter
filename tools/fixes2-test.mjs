@@ -19,13 +19,13 @@ page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('favi
 
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-// difficoltà bloccata durante il caricamento
-const lockedDuringLoad = await page.evaluate(() => document.getElementById('difficulty').classList.contains('diff-locked'));
-check('difficoltà bloccata in caricamento', lockedDuringLoad);
+// difficoltà nascosta durante il caricamento
+const hiddenDuringLoad = await page.evaluate(() => getComputedStyle(document.getElementById('difficulty')).display === 'none');
+check('difficoltà nascosta in caricamento', hiddenDuringLoad);
 
 await page.waitForFunction(() => { const b = document.getElementById('btn-play'); return b && b.style.display !== 'none'; }, { timeout: 60000 });
-const unlockedAfter = await page.evaluate(() => !document.getElementById('difficulty').classList.contains('diff-locked'));
-check('difficoltà sbloccata a fine caricamento', unlockedAfter);
+const shownAfter = await page.evaluate(() => getComputedStyle(document.getElementById('difficulty')).display !== 'none');
+check('difficoltà visibile a fine caricamento', shownAfter);
 
 // audio: passi + gunshot + pioggia caricati
 const audio = await page.evaluate(() => {
@@ -66,7 +66,7 @@ await sleep(500);
 const backToMenu = await page.evaluate(() => ({
   state: window.__game.state,
   menuVisible: !document.getElementById('menu').classList.contains('hidden'),
-  diffUnlocked: !document.getElementById('difficulty').classList.contains('diff-locked'),
+  diffUnlocked: getComputedStyle(document.getElementById('difficulty')).display !== 'none',
 }));
 check('MENU dopo morte: difficoltà riselezionabile', backToMenu.state === 'menu' && backToMenu.menuVisible && backToMenu.diffUnlocked, JSON.stringify(backToMenu));
 // cambia difficoltà dal menu e rigioca

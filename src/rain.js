@@ -62,7 +62,7 @@ export class Rain {
   start(intensity = 1) { this.active = true; this.target = intensity; this.mesh.visible = true; }
   stop() { this.active = false; this.target = 0; }
 
-  /** Scatena un fulmine: lampo a scatti + tuono ritardato (distanza). */
+  /** Scatena un fulmine: lampo a scatti + tuono subito dopo (in sync col lampo). */
   strike() {
     // sequenza di flicker realistica
     this.flashSeq = [
@@ -70,9 +70,10 @@ export class Rain {
       { t: 0.16, v: 0.35 }, { t: 0.22, v: 0.6 }, { t: 0.4, v: 0 },
     ];
     this.flashT = 0;
-    const distant = Math.random() < 0.5;
-    const delay = distant ? 1.2 + Math.random() * 1.8 : 0.15 + Math.random() * 0.5;
-    setTimeout(() => Audio.play('thunder', { vol: distant ? 0.7 : 1.0, rate: distant ? 0.9 : 1 }), delay * 1000);
+    // tuono legato al lampo: vicino = quasi immediato e forte, lontano = breve ritardo
+    const distant = Math.random() < 0.45;
+    const delay = distant ? 0.5 + Math.random() * 0.7 : 0.06 + Math.random() * 0.18;
+    setTimeout(() => Audio.play('thunder', { vol: distant ? 0.85 : 1.1, rate: distant ? 0.88 : 1 }), delay * 1000);
   }
 
   update(dt, center, effects) {

@@ -50,34 +50,35 @@ export class Player {
       this.model.traverse((o) => {
         if (o.isMesh && /axe|sword|blade|knife|melee|hammer/i.test(o.name)) o.visible = false;
       });
-      // osso della mano che impugna l'arma (lo stesso socket dell'ascia rimossa)
-      this.handBone = this.model.getObjectByName('Middle1.L')
-        || this.model.getObjectByName('Middle1.R')
+      // mano (impugnatura) e avambraccio del braccio che mira: il braccio destro
+      // è quello esteso nelle pose con arma. La direzione gomito->mano orienta l'arma.
+      this.handBone = this.model.getObjectByName('Middle1.R')
+        || this.model.getObjectByName('Middle1.L')
         || this.model.getObjectByName('LowerArm.R');
+      this.armBone = this.model.getObjectByName('LowerArm.R')
+        || this.model.getObjectByName('LowerArm.L')
+        || this.model.getObjectByName('Shoulder.R');
     } else {
       this.model = makeProceduralSoldier();
       this.anim = new Animator(this.model, []);
       this.handBone = null;
+      this.armBone = null;
     }
     this.root.add(this.model);
 
-    // L'arma è AGGANCIATA all'osso della mano: segue rigidamente il braccio
-    // (posizione e rotazione). gunCalib allinea la canna in avanti. Compensiamo
-    // la scala dell'osso così il modello mantiene le dimensioni reali.
+    // L'arma vive nella scena: ogni frame la mettiamo sulla mano e la orientiamo
+    // lungo l'avambraccio (segue posizione E rotazione reale del braccio animato).
     this.gunMount = new THREE.Group();
     this.gunMount.visible = false; // mostrata solo in partita (vedi _updateGun)
+    game.scene.add(this.gunMount);
     this._gunPos = new THREE.Vector3();
-    this._gunCalib = { rx: -Math.PI / 2, ry: 0, rz: 0 }; // bone -> canna in avanti
-    if (this.handBone) {
-      this.model.updateMatrixWorld(true);
-      const ws = new THREE.Vector3();
-      this.handBone.getWorldScale(ws);
-      this.gunMount.scale.setScalar(1 / (ws.x || 1));
-      this.gunMount.rotation.set(this._gunCalib.rx, this._gunCalib.ry, this._gunCalib.rz);
-      this.handBone.add(this.gunMount);
-    } else {
-      game.scene.add(this.gunMount);
-    }
+    this._handPos = new THREE.Vector3();
+    this._elbowPos = new THREE.Vector3();
+    this._armDir = new THREE.Vector3();
+    this._ux = new THREE.Vector3();
+    this._uy = new THREE.Vector3();
+    this._uz = new THREE.Vector3();
+    this._basis = new THREE.Matrix4();
     this._mountGun('pistol');
 
     // luce calda personale: tiene leggibile l'eroe nel buio
@@ -110,11 +111,10 @@ export class Player {
       gun.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
       const wrap = new THREE.Group();
       wrap.add(gun);
-      // ricentra sull'origine, poi spingi avanti così la mano impugna la parte posteriore
+      // ricentra sull'origine, poi spingi avanti così l'impugnatura sta sulla mano
       const c = new THREE.Box3().setFromObject(wrap).getCenter(_v2);
       gun.position.sub(c);
-      gun.position.z += entry.length * 0.28;
-      gun.position.y -= 0.05;
+      gun.position.z += entry.length * 0.42;
       this.gunMount.add(wrap);
     } else {
       const gun = makeRifle();
@@ -124,13 +124,28 @@ export class Player {
     }
   }
 
-  /** Aggiorna posizione mondo della canna (per il muzzle) e visibilità. */
+  /** Mette l'arma sulla mano, orientata lungo l'avambraccio; segue il braccio. */
   _updateGun() {
     this.gunMount.visible = !this.dead;
-    if (this.handBone) {
-      // l'arma segue automaticamente l'osso (è sua figlia): leggi solo la
-      // posizione mondo della bocca della canna per far partire i proiettili
-      this.gunMount.getWorldPosition(this._gunPos);
+    if (this.dead) return;
+    if (this.handBone && this.armBone) {
+      this.handBone.getWorldPosition(this._handPos);
+      this.armBone.getWorldPosition(this._elbowPos);
+      // direzione dell'avambraccio (gomito -> mano)
+      this._armDir.subVectors(this._handPos, this._elbowPos);
+      if (this._armDir.lengthSq() < 1e-6) this._armDir.set(this.aimDir.x, 0, this.aimDir.z);
+      this._armDir.normalize();
+      // base ortonormale: +Z lungo il braccio (canna), +Y verso l'alto
+      const z = this._uz.copy(this._armDir);
+      const x = this._ux.crossVectors(this._uy.set(0, 1, 0), z);
+      if (x.lengthSq() < 1e-5) x.set(1, 0, 0);
+      x.normalize();
+      const y = this._uy.crossVectors(z, x).normalize();
+      this._basis.makeBasis(x, y, z);
+      this.gunMount.position.copy(this._handPos);
+      this.gunMount.quaternion.setFromRotationMatrix(this._basis);
+      // bocca della canna (per il muzzle)
+      this._gunPos.copy(this._handPos).addScaledVector(z, 0.5);
     } else {
       this._gunPos.set(
         this.pos.x + this.aimDir.x * 0.45 + this.aimDir.z * 0.18,

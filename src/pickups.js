@@ -18,9 +18,11 @@ function glowTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const g = cv.getContext('2d');
+  // alone compatto: nucleo piccolo e bordi che svaniscono in fretta (niente blob)
   const grad = g.createRadialGradient(s / 2, s / 2, 1, s / 2, s / 2, s / 2);
-  grad.addColorStop(0, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grad.addColorStop(0.22, 'rgba(255,255,255,0.3)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0)');
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, s, s);
@@ -55,7 +57,7 @@ export class Pickups {
     this._glowMats = {};
     for (const [k, col] of Object.entries(PICKUP_COLORS)) {
       this._glowMats[k] = new THREE.SpriteMaterial({
-        map: this._glowTex, color: col, transparent: true, opacity: 0.9,
+        map: this._glowTex, color: col, transparent: true, opacity: 0.45,
         blending: THREE.AdditiveBlending, depthWrite: false,
       });
     }
@@ -82,10 +84,10 @@ export class Pickups {
       mesh = this._templates[type].clone(); // condivide geometria e materiali
     }
 
-    // alone additivo invece di una luce dinamica
+    // alone additivo discreto invece di una luce dinamica
     const glow = new THREE.Sprite(this._glowMats[colorKey]);
-    glow.scale.setScalar(type === 'weapon' ? 2.0 : 1.6);
-    glow.position.y = 0.15;
+    glow.scale.setScalar(type === 'weapon' ? 1.15 : 0.95);
+    glow.position.y = 0.18;
     glow.renderOrder = 8;
     mesh.add(glow);
 
@@ -114,7 +116,7 @@ export class Pickups {
       it.life -= dt;
       it.mesh.position.y = 0.55 + Math.sin(t * 2.2 + it.seed) * 0.12;
       it.mesh.rotation.y += dt * 1.6;
-      it.glow.material.opacity = 0.7 + Math.sin(t * 3 + it.seed) * 0.25;
+      it.glow.material.opacity = 0.4 + Math.sin(t * 3 + it.seed) * 0.12;
       if (it.life < 5) it.mesh.visible = Math.sin(t * 10) > -0.4;
 
       if (!player.dead) {

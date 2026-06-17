@@ -386,7 +386,7 @@ class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     if (on) {
-      const target = 0.5 * intensity;
+      const target = 0.32 * intensity;
       if (this._rainSrc) { this._rainGain.gain.setTargetAtTime(target, t, 1.0); return; }
       const buf = this.buffers.get('rain_loop');
       if (!buf || !buf.length) return;

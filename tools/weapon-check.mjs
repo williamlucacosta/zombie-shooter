@@ -34,7 +34,7 @@ await sleep(3500); // lascia partire/sfumare il banner d'ondata
 // zoom: avvicina la camera tramite CONFIG (il loop la legge ogni frame)
 await page.evaluate(() => {
   const c = window.__CONFIG.camera;
-  c.offsetY = 3.6; c.offsetZ = 4.6; c.lerp = 30; c.aimPull = 0;
+  c.offsetY = 2.4; c.offsetZ = 3.2; c.lerp = 30; c.aimPull = 0;
 });
 
 async function shot(weapon, file, mx, my) {
@@ -53,6 +53,14 @@ await shot('pistol', 'tools/wpn_pistol.png', 780, 360);
 await shot('shotgun', 'tools/wpn_shotgun.png', 780, 360);
 await shot('smg', 'tools/wpn_smg.png', 780, 360);
 await shot('magnum', 'tools/wpn_magnum.png', 120, 360);
+
+// scatto in camminata: l'arma deve restare nella mano mentre il braccio oscilla
+await page.evaluate(() => { const g = window.__game; g.player.switchTo('shotgun'); });
+await page.mouse.move(780, 360);
+await page.keyboard.down('KeyW');
+await sleep(700);
+await page.screenshot({ path: 'tools/wpn_walk.png' });
+await page.keyboard.up('KeyW');
 
 console.log('ERRORI:', errs.length);
 errs.slice(0, 10).forEach((e) => console.log('  ' + e));

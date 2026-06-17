@@ -250,9 +250,9 @@ for (const b of document.querySelectorAll('.diff-btn')) {
   b.addEventListener('click', () => { applyDifficulty(b.dataset.diff); Audio.play('click', { vol: 0.5 }); });
 }
 applyDifficulty(DIFFICULTIES[savedDiff] ? savedDiff : 'normale');
-// disabilitata finché le risorse non sono pronte (vedi IIFE di caricamento)
+// nascosta del tutto finché le risorse non sono pronte (vedi IIFE di caricamento)
 function setDiffEnabled(on) {
-  document.getElementById('difficulty').classList.toggle('diff-locked', !on);
+  document.getElementById('difficulty').style.display = on ? 'flex' : 'none';
 }
 setDiffEnabled(false);
 
