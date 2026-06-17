@@ -223,6 +223,7 @@ Audio.init(); // contesto sospeso finché l'utente non clicca
   game.pickups = new Pickups(game);
 
   ui.readyToPlay(best0);
+  setDiffEnabled(true); // la difficoltà è scegliibile solo a risorse caricate
 
   // risorse pesanti non necessarie all'avvio: musica e scheletri (ondata 6+)
   Audio.loadDeferred();
@@ -249,11 +250,34 @@ for (const b of document.querySelectorAll('.diff-btn')) {
   b.addEventListener('click', () => { applyDifficulty(b.dataset.diff); Audio.play('click', { vol: 0.5 }); });
 }
 applyDifficulty(DIFFICULTIES[savedDiff] ? savedDiff : 'normale');
+// disabilitata finché le risorse non sono pronte (vedi IIFE di caricamento)
+function setDiffEnabled(on) {
+  document.getElementById('difficulty').classList.toggle('diff-locked', !on);
+}
+setDiffEnabled(false);
+
+// Torna al menu (da game over o abbandono): qui si può ricambiare difficoltà.
+function returnToMenu() {
+  game.state = 'menu';
+  game.director.clear();
+  game.pickups.clear();
+  game.rain.stop();
+  Audio.setRain(false);
+  game.weatherDark = 0;
+  game.wave = 0;
+  game.player.reset();
+  game.player.gunMount.visible = false;
+  ui.bossHide();
+  ui.countdown(null);
+  ui.showScreen('menu');
+  setDiffEnabled(true);
+}
 
 ui.el.btnPlay.addEventListener('click', () => game.startRun());
 ui.el.btnRestart.addEventListener('click', () => game.startRun());
 ui.el.btnResume.addEventListener('click', () => togglePause());
-ui.el.btnQuit.addEventListener('click', () => { game.state = 'playing'; game.endGame(); });
+ui.el.btnQuit.addEventListener('click', () => returnToMenu());           // ABBANDONA -> menu
+document.getElementById('btn-gameover-menu').addEventListener('click', () => returnToMenu());
 
 for (const [id, fn] of [['vol-master', 'setMaster'], ['vol-music', 'setMusic'], ['vol-sfx', 'setSfx']]) {
   document.getElementById(id).addEventListener('input', (e) => Audio[fn](e.target.value / 100));

@@ -60,10 +60,10 @@ Build di produzione: `npm run build`, poi `npm run preview`.
 - **Spari (registrazioni reali premium)**: Still North "Free Firearm Sound Library"
   ([buddingmonkey/FreeFirearmsSFXLibrary](https://github.com/buddingmonkey/FreeFirearmsSFXLibrary)) —
   Colt 1911, Mossberg, AR-15, Smith & Wesson 642 — CC0
-- **Pioggia**: Ylmir "Rain (loopable)" — CC0; **Musica** "The Surreal Truth" di Joth — CC0;
-  **ruggito boss** di trazzz123 — CC0; **voci zombi/ricariche/battito** da artisticdude,
-  saturn91, SpringySpringo, bart — CC0; **suoni UI** di [Kenney](https://kenney.nl) — CC0;
-  tutti da [OpenGameArt](https://opengameart.org)
+- **Pioggia**: Ylmir "Rain (loopable)" — CC0; **Passi**: TinyWorlds "Different steps" — CC0;
+  **Musica** "The Surreal Truth" di Joth — CC0; **ruggito boss** di trazzz123 — CC0;
+  **voci zombi/ricariche/battito** da artisticdude, saturn91, SpringySpringo, bart — CC0;
+  **suoni UI** di [Kenney](https://kenney.nl) — CC0; tutti da [OpenGameArt](https://opengameart.org)
 - **Tuoni**: "thunderclap" di **Jerimee** (OpenGameArt) — **CC-BY 3.0** (unico asset con
   obbligo di attribuzione)
 - **Font**: Creepster — SIL Open Font License (Google Fonts)

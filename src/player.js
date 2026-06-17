@@ -32,6 +32,7 @@ export class Player {
     this.current = 'pistol';
     this.fireTimer = 0;
     this.reloadT = 0;
+    this._stepT = 0; // cadenza dei passi
     this.bullets = [];
     this._bulletMats = new Map();
     this._bulletGeo = new THREE.SphereGeometry(0.07, 6, 6);
@@ -49,7 +50,7 @@ export class Player {
       this.model.traverse((o) => {
         if (o.isMesh && /axe|sword|blade|knife|melee|hammer/i.test(o.name)) o.visible = false;
       });
-      // osso della mano che impugna l'arma (lo stesso a cui era agganciata l'ascia)
+      // osso della mano che impugna l'arma (lo stesso socket dell'ascia rimossa)
       this.handBone = this.model.getObjectByName('Middle1.L')
         || this.model.getObjectByName('Middle1.R')
         || this.model.getObjectByName('LowerArm.R');
@@ -60,12 +61,23 @@ export class Player {
     }
     this.root.add(this.model);
 
-    // L'arma vive nella scena e ogni frame segue l'osso della mano,
-    // ma è orientata verso la mira (la canna punta dove spari).
+    // L'arma è AGGANCIATA all'osso della mano: segue rigidamente il braccio
+    // (posizione e rotazione). gunCalib allinea la canna in avanti. Compensiamo
+    // la scala dell'osso così il modello mantiene le dimensioni reali.
     this.gunMount = new THREE.Group();
     this.gunMount.visible = false; // mostrata solo in partita (vedi _updateGun)
-    game.scene.add(this.gunMount);
     this._gunPos = new THREE.Vector3();
+    this._gunCalib = { rx: -Math.PI / 2, ry: 0, rz: 0 }; // bone -> canna in avanti
+    if (this.handBone) {
+      this.model.updateMatrixWorld(true);
+      const ws = new THREE.Vector3();
+      this.handBone.getWorldScale(ws);
+      this.gunMount.scale.setScalar(1 / (ws.x || 1));
+      this.gunMount.rotation.set(this._gunCalib.rx, this._gunCalib.ry, this._gunCalib.rz);
+      this.handBone.add(this.gunMount);
+    } else {
+      game.scene.add(this.gunMount);
+    }
     this._mountGun('pistol');
 
     // luce calda personale: tiene leggibile l'eroe nel buio
@@ -112,22 +124,22 @@ export class Player {
     }
   }
 
-  /** Posiziona l'arma sulla mano e la orienta verso la mira. */
+  /** Aggiorna posizione mondo della canna (per il muzzle) e visibilità. */
   _updateGun() {
-    if (this.dead) { this.gunMount.visible = false; return; }
-    this.gunMount.visible = true;
+    this.gunMount.visible = !this.dead;
     if (this.handBone) {
-      this.handBone.getWorldPosition(this._gunPos);
+      // l'arma segue automaticamente l'osso (è sua figlia): leggi solo la
+      // posizione mondo della bocca della canna per far partire i proiettili
+      this.gunMount.getWorldPosition(this._gunPos);
     } else {
-      // fallback (soldato procedurale): davanti e leggermente a destra del corpo
       this._gunPos.set(
         this.pos.x + this.aimDir.x * 0.45 + this.aimDir.z * 0.18,
         1.05,
         this.pos.z + this.aimDir.z * 0.45 - this.aimDir.x * 0.18,
       );
+      this.gunMount.position.copy(this._gunPos);
+      this.gunMount.rotation.set(0, Math.atan2(this.aimDir.x, this.aimDir.z), 0);
     }
-    this.gunMount.position.copy(this._gunPos);
-    this.gunMount.rotation.set(0, Math.atan2(this.aimDir.x, this.aimDir.z), 0);
   }
 
   giveWeapon(id) {
@@ -262,6 +274,18 @@ export class Player {
     else if (spd > 0.8) purpose = 'walk';
     if (this.anim.currentPurpose !== purpose) {
       this.anim.play(purpose, { timeScale: purpose === 'idle' ? 1 : THREE.MathUtils.clamp(spd / (purpose === 'run' ? 7 : 3), 0.7, 1.8) });
+    }
+
+    // passi: cadenza più rapida e più forte quando si corre (non durante lo scatto)
+    if (this.dashT <= 0 && spd > 0.8) {
+      this._stepT -= dt;
+      if (this._stepT <= 0) {
+        const running = spd > 5.5;
+        this._stepT = running ? 0.28 : 0.46;
+        Audio.play('step', { vol: running ? 0.5 : 0.34, rate: 0.92 + Math.random() * 0.16 });
+      }
+    } else {
+      this._stepT = 0.1; // primo passo quasi immediato quando riparte
     }
 
     // ---- ricarica ----

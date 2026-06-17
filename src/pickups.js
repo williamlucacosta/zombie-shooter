@@ -1,78 +1,98 @@
 // Oggetti raccoglibili: medikit, munizioni, armi. Fluttuano, brillano,
 // vengono attirati dal giocatore e lampeggiano prima di sparire.
+//
+// NOTA prestazioni: niente PointLight per pickup (aggiungere/togliere luci a
+// runtime forza Three.js a ricompilare TUTTI i materiali → scatto). Usiamo
+// geometrie/materiali condivisi (clonati per riferimento) e un alone additivo
+// (sprite) che non tocca il conteggio luci.
 
 import * as THREE from 'three';
 import { Assets } from './assets.js';
-import { WEAPONS } from './config.js';
 import { Audio } from './audio.js';
 
 const _v = new THREE.Vector3();
-
-function makeMedkitMesh() {
-  const g = new THREE.Group();
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5, 0.3, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.5 }),
-  );
-  const crossMat = new THREE.MeshStandardMaterial({ color: 0xd02020, emissive: 0x500000, emissiveIntensity: 1.5 });
-  const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.1), crossMat);
-  c1.position.y = 0.18;
-  const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.05, 0.3), crossMat);
-  c2.position.y = 0.18;
-  g.add(box, c1, c2);
-  return g;
-}
-
-function makeAmmoMesh() {
-  const g = new THREE.Group();
-  const box = new THREE.Mesh(
-    new THREE.BoxGeometry(0.45, 0.3, 0.35),
-    new THREE.MeshStandardMaterial({ color: 0x3a4a30, roughness: 0.7 }),
-  );
-  const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(0.47, 0.08, 0.37),
-    new THREE.MeshStandardMaterial({ color: 0xffb84d, emissive: 0x663300, emissiveIntensity: 1.2 }),
-  );
-  g.add(box, stripe);
-  return g;
-}
-
 const PICKUP_COLORS = { medkit: 0xff4040, ammo: 0xffb84d, weapon: 0x5ad0ff };
+
+function glowTexture() {
+  const s = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const g = cv.getContext('2d');
+  const grad = g.createRadialGradient(s / 2, s / 2, 1, s / 2, s / 2, s / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, s, s);
+  return new THREE.CanvasTexture(cv);
+}
 
 export class Pickups {
   constructor(game) {
     this.game = game;
     this.items = [];
+    this._glowTex = glowTexture();
+
+    // --- template condivisi (geometrie + materiali creati UNA volta) ---
+    const medBox = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.5 });
+    const medCross = new THREE.MeshStandardMaterial({ color: 0xd02020, emissive: 0x600000, emissiveIntensity: 1.6 });
+    const med = new THREE.Group();
+    const mb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.5), medBox);
+    const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.1), medCross); c1.position.y = 0.18;
+    const c2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.3), medCross); c2.position.y = 0.18;
+    med.add(mb, c1, c2);
+
+    const ammoBox = new THREE.MeshStandardMaterial({ color: 0x3a4a30, roughness: 0.7 });
+    const ammoStripe = new THREE.MeshStandardMaterial({ color: 0xffb84d, emissive: 0x6a3500, emissiveIntensity: 1.4 });
+    const ammo = new THREE.Group();
+    const ab = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 0.35), ammoBox);
+    const as = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.08, 0.37), ammoStripe);
+    ammo.add(ab, as);
+
+    [med, ammo].forEach((tpl) => tpl.traverse((o) => { if (o.isMesh) o.castShadow = true; }));
+    this._templates = { medkit: med, ammo };
+    // materiali sprite condivisi per colore (additivi, nessuna ricompilazione)
+    this._glowMats = {};
+    for (const [k, col] of Object.entries(PICKUP_COLORS)) {
+      this._glowMats[k] = new THREE.SpriteMaterial({
+        map: this._glowTex, color: col, transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+    }
   }
 
   spawn(pos, type, data = null) {
     const g = this.game;
+    const colorKey = type === 'weapon' ? 'weapon' : type;
     let mesh;
-    if (type === 'medkit') mesh = makeMedkitMesh();
-    else if (type === 'ammo') mesh = makeAmmoMesh();
-    else if (type === 'weapon') {
+    if (type === 'weapon') {
       const entry = Assets.guns.get(data);
       if (entry) {
-        mesh = entry.scene.clone();
-        const box = new THREE.Box3().setFromObject(mesh);
-        const size = box.getSize(_v);
+        const gun = entry.scene.clone();
+        const size = new THREE.Box3().setFromObject(gun).getSize(_v);
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        mesh.scale.setScalar(0.9 / maxDim);
-        const wrap = new THREE.Group();
-        wrap.add(mesh);
-        mesh = wrap;
+        gun.scale.setScalar(0.9 / maxDim);
+        gun.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        mesh = new THREE.Group();
+        mesh.add(gun);
       } else {
-        mesh = makeAmmoMesh();
+        mesh = this._templates.ammo.clone();
       }
+    } else {
+      mesh = this._templates[type].clone(); // condivide geometria e materiali
     }
-    mesh.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+
+    // alone additivo invece di una luce dinamica
+    const glow = new THREE.Sprite(this._glowMats[colorKey]);
+    glow.scale.setScalar(type === 'weapon' ? 2.0 : 1.6);
+    glow.position.y = 0.15;
+    glow.renderOrder = 8;
+    mesh.add(glow);
+
     mesh.position.set(pos.x, 0.55, pos.z);
-    const colorKey = type === 'weapon' ? 'weapon' : type;
-    const light = new THREE.PointLight(PICKUP_COLORS[colorKey], 1.6, 5, 2);
-    light.position.set(pos.x, 1.0, pos.z);
-    g.scene.add(mesh, light);
+    g.scene.add(mesh);
     g.effects.spawnPillar(pos, PICKUP_COLORS[colorKey], 0.8);
-    this.items.push({ mesh, light, type, data, life: 30, seed: Math.random() * 10 });
+    this.items.push({ mesh, glow, type, data, life: 30, seed: Math.random() * 10 });
   }
 
   spawnWeapon(pos, weaponId) {
@@ -89,13 +109,12 @@ export class Pickups {
   }
 
   update(dt, player, t) {
-    const g = this.game;
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       it.life -= dt;
       it.mesh.position.y = 0.55 + Math.sin(t * 2.2 + it.seed) * 0.12;
       it.mesh.rotation.y += dt * 1.6;
-      it.light.intensity = 1.4 + Math.sin(t * 3 + it.seed) * 0.4;
+      it.glow.material.opacity = 0.7 + Math.sin(t * 3 + it.seed) * 0.25;
       if (it.life < 5) it.mesh.visible = Math.sin(t * 10) > -0.4;
 
       if (!player.dead) {
@@ -106,8 +125,6 @@ export class Pickups {
           // attrazione magnetica
           it.mesh.position.x += (dx / dist) * 6 * dt;
           it.mesh.position.z += (dz / dist) * 6 * dt;
-          it.light.position.x = it.mesh.position.x;
-          it.light.position.z = it.mesh.position.z;
         }
         if (dist < 0.85) {
           this._collect(it, player);
@@ -136,13 +153,12 @@ export class Pickups {
   }
 
   _remove(i) {
-    const it = this.items[i];
-    this.game.scene.remove(it.mesh, it.light);
+    this.game.scene.remove(this.items[i].mesh);
     this.items.splice(i, 1);
   }
 
   clear() {
-    for (const it of this.items) this.game.scene.remove(it.mesh, it.light);
+    for (const it of this.items) this.game.scene.remove(it.mesh);
     this.items = [];
   }
 }

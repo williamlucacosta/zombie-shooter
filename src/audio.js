@@ -25,6 +25,7 @@ const AUDIO_MANIFEST = {
   heartbeat: ['heartbeat.ogg'],
   pickup: ['pickup.ogg'],
   click: ['click.ogg'],
+  step: ['footstep_1.ogg', 'footstep_2.ogg', 'footstep_3.ogg', 'footstep_4.ogg'],
   thunder: ['thunder_1.ogg', 'thunder_2.ogg'],
   rain_loop: ['rain_loop.ogg'],
   music_ambient: ['music_ambient.ogg'],
@@ -40,7 +41,8 @@ class AudioEngine {
     this.started = false;
     this.intensity = 0;
     this._musicSource = null;
-    this._vol = { master: 0.8, music: 0.7, sfx: 0.9 };
+    this._vol = { master: 0.8, music: 0.5, sfx: 0.9 };
+    this._musicLevel = 0.42; // livello della traccia musicale dentro il bus musica
   }
 
   init() {
@@ -116,7 +118,7 @@ class AudioEngine {
     src.loop = true;
     const g = this.ctx.createGain();
     g.gain.value = 0.0001;
-    g.gain.exponentialRampToValueAtTime(0.55, this.ctx.currentTime + 2.5); // fade-in dolce
+    g.gain.exponentialRampToValueAtTime(this._musicLevel, this.ctx.currentTime + 3.5); // fade-in dolce
     src.connect(g).connect(this.musicBus);
     src.start();
     this._musicSource = src;
