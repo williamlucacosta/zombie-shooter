@@ -5,10 +5,10 @@
 // Tutti i suoni sono OGG mono (~128kbps): leggeri e veloci da caricare.
 // I gunshot sono registrazioni reali premium CC0 (1911, Mossberg, AR-15, S&W 642).
 // Le chiavi con array offrono varianti casuali.
-const AUDIO_MANIFEST = {
+export const AUDIO_MANIFEST = {
   zombie_growl: [
-    'zombie_growl_1.ogg', 'zombie_growl_2.ogg', 'zombie_growl_3.ogg', 'zombie_growl_4.ogg',
-    'zombie_growl_5.ogg', 'zombie_growl_6.ogg', 'zombie_growl_7.ogg', 'zombie_growl_8.ogg',
+    // rimossi 1/2/3/5/6 su richiesta (suonavano male); tenuti i migliori
+    'zombie_growl_4.ogg', 'zombie_growl_7.ogg', 'zombie_growl_8.ogg',
     'zombie_growl_9.ogg', 'zombie_growl_10.ogg',
   ],
   zombie_attack: ['zombie_attack_1.ogg', 'zombie_attack_2.ogg', 'zombie_attack_3.ogg', 'zombie_attack_4.ogg'],
@@ -24,11 +24,21 @@ const AUDIO_MANIFEST = {
   slam: ['slam.ogg'],
   heartbeat: ['heartbeat.ogg'],
   pickup: ['pickup.ogg'],
+  weapon_pickup: ['weapon_pickup.ogg'],
   click: ['click.ogg'],
-  step: ['footstep_1.ogg', 'footstep_2.ogg', 'footstep_3.ogg', 'footstep_4.ogg'],
+  step: ['footstep_1.ogg', 'footstep_3.ogg', 'footstep_4.ogg'], // rimosso footstep_2 (brutto)
   thunder: ['thunder_1.ogg', 'thunder_2.ogg'],
   rain_loop: ['rain_loop.ogg'],
   music_ambient: ['music_ambient.ogg'],
+  // suoni reali CC0 che sostituiscono i precedenti sintetizzati (Audio.play preferisce il file)
+  dash: ['dash.ogg'],
+  hit_flesh: ['hit_flesh.ogg'],
+  crit: ['crit.ogg'],
+  splat: ['splat.ogg'],
+  spit: ['spit.ogg'],
+  hurt: ['hurt_1.ogg', 'hurt_2.ogg', 'hurt_3.ogg'],
+  wave_start: ['wave_start.ogg'],
+  wave_clear: ['wave_clear.ogg'],
 };
 
 // Con l'audio ormai leggero (~1.2 MB totali) non serve differire nulla.
@@ -165,8 +175,14 @@ class AudioEngine {
     this._tryStartMusicTrack(); // se il gioco è già partito, attacca la musica ora
   }
 
-  /** Riproduce un suono per nome: file se disponibile, altrimenti synth. */
-  play(name, { vol = 1, rate = 1, pan = 0 } = {}) {
+  /**
+   * Riproduce un suono per nome: file se disponibile, altrimenti synth.
+   * pitchVar = ampiezza della variazione casuale di intonazione (±frazione, es. 0.06 = ±6%).
+   * volVar   = ampiezza della riduzione casuale di volume (0..1): dà respiro dinamico.
+   * Insieme danno varietà e impediscono la "fatica da ripetizione" su suoni frequenti
+   * (passi, versi degli zombi, impatti).
+   */
+  play(name, { vol = 1, rate = 1, pan = 0, pitchVar = 0.06, volVar = 0 } = {}) {
     if (!this.ctx || this.ctx.state !== 'running') return;
     if (vol <= 0.01) return;
     const list = this.buffers.get(name);
@@ -174,9 +190,9 @@ class AudioEngine {
       const c = this.ctx;
       const src = c.createBufferSource();
       src.buffer = list[(Math.random() * list.length) | 0];
-      src.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+      src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * pitchVar);
       const g = c.createGain();
-      g.gain.value = vol;
+      g.gain.value = vol * (1 - Math.random() * volVar);
       const p = c.createStereoPanner();
       p.pan.value = pan;
       src.connect(g).connect(p).connect(this.sfxBus);
@@ -324,7 +340,10 @@ class AudioEngine {
         [523, 659, 784, 1046].forEach((f, i) => this._tone(t + i * 0.07, 0.12, { type: 'triangle', f0: f, peak: 0.22 * v }));
         break;
       case 'dash':
-        this._noise(t, 0.18, { hp: 600, lp: 1200, lpEnd: 5000, peak: 0.22 * v, attack: 0.02 });
+        // whoosh d'aria: corpo grave che sale + sibilo acuto rapido = spostamento d'aria
+        this._noise(t, 0.22, { hp: 400, lp: 900, lpEnd: 5200, peak: 0.24 * v, attack: 0.015, pan });
+        this._noise(t + 0.01, 0.1, { hp: 1800, lp: 8000, lpEnd: 2500, peak: 0.1 * v, attack: 0.004, pan });
+        this._tone(t, 0.16, { type: 'sine', f0: 240, f1: 90, peak: 0.07 * v, pan });
         break;
       case 'wave_start':
         this._tone(t, 1.6, { type: 'sine', f0: 98, peak: 0.4 * v, attack: 0.01 });

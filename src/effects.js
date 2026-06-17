@@ -105,6 +105,42 @@ class ParticlePool {
   }
 }
 
+/** Texture additiva per il lampo di volata: nucleo rovente + raggi a stella. */
+function makeFlashTexture() {
+  const s = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const g = cv.getContext('2d');
+  const cx = s / 2, cy = s / 2;
+  // alone caldo
+  const halo = g.createRadialGradient(cx, cy, 0, cx, cy, s / 2);
+  halo.addColorStop(0, 'rgba(255,255,235,1)');
+  halo.addColorStop(0.18, 'rgba(255,224,150,0.95)');
+  halo.addColorStop(0.45, 'rgba(255,150,60,0.45)');
+  halo.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = halo;
+  g.fillRect(0, 0, s, s);
+  // raggi a stella (4 lunghi + 4 corti)
+  g.translate(cx, cy);
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 8; i++) {
+    const long = i % 2 === 0;
+    const len = (long ? 0.46 : 0.26) * s;
+    const w = (long ? 0.05 : 0.03) * s;
+    g.rotate(Math.PI / 4);
+    const ray = g.createLinearGradient(0, 0, len, 0);
+    ray.addColorStop(0, 'rgba(255,245,210,0.9)');
+    ray.addColorStop(1, 'rgba(255,160,70,0)');
+    g.fillStyle = ray;
+    g.beginPath();
+    g.moveTo(0, -w); g.lineTo(len, 0); g.lineTo(0, w); g.closePath();
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function makeSplatTexture() {
   const s = 128;
   const cv = document.createElement('canvas');
@@ -132,6 +168,7 @@ export class Effects {
     this.alpha = new ParticlePool(scene, 1600, false);
     this.trauma = 0;
     this._tmp = new THREE.Vector3();
+    this._tmp2 = new THREE.Vector3();
 
     // --- decal di sangue ---
     this.splatTex = makeSplatTexture();
@@ -205,29 +242,135 @@ export class Effects {
       this.flashLights.push(l);
     }
     this.flashCursor = 0;
+
+    // --- lampi di volata (sprite billboard additivi sopra la canna) ---
+    this.flashTex = makeFlashTexture();
+    this.muzzleFlashes = [];
+    for (let i = 0; i < 6; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this.flashTex, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, rotation: 0,
+      }));
+      sp.visible = false;
+      sp.renderOrder = 18;
+      scene.add(sp);
+      this.muzzleFlashes.push({ sprite: sp, life: 0, maxLife: 0.055, baseScale: 1 });
+    }
+    this.muzzleCursor = 0;
   }
 
   // ------------------------------------------------------------- spawner --
 
-  muzzle(pos, dir, colorHex) {
+  muzzle(pos, dir, colorHex, scale = 1) {
+    // luce a impulso
     const l = this.flashLights[this.flashCursor];
     this.flashCursor = (this.flashCursor + 1) % this.flashLights.length;
     l.color.set(colorHex);
     l.position.copy(pos).addScaledVector(dir, 0.4);
     l.position.y += 0.05;
-    l.intensity = 26;
-    for (let i = 0; i < 6; i++) {
-      const spread = 0.35;
+    l.intensity = 26 * scale;
+
+    // lampo di volata: sprite billboard a stella appena oltre la bocca della canna
+    const f = this.muzzleFlashes[this.muzzleCursor];
+    this.muzzleCursor = (this.muzzleCursor + 1) % this.muzzleFlashes.length;
+    f.sprite.position.copy(pos).addScaledVector(dir, 0.18);
+    f.sprite.position.y += 0.02;
+    f.baseScale = (0.9 + Math.random() * 0.5) * scale;
+    f.sprite.material.rotation = Math.random() * Math.PI * 2;
+    f.sprite.material.color.set(colorHex);
+    f.sprite.material.opacity = 1;
+    f.sprite.visible = true;
+    f.life = f.maxLife;
+
+    // scintille incandescenti proiettate in avanti a ventaglio
+    const sparks = Math.round(7 * scale);
+    for (let i = 0; i < sparks; i++) {
+      const spread = 0.3;
       this.additive.emit({
         pos,
         vel: this._tmp.set(
-          dir.x * (5 + Math.random() * 7) + (Math.random() - 0.5) * spread * 8,
-          (Math.random() - 0.2) * 2.2,
-          dir.z * (5 + Math.random() * 7) + (Math.random() - 0.5) * spread * 8,
+          dir.x * (7 + Math.random() * 10) + (Math.random() - 0.5) * spread * 9,
+          (Math.random() - 0.15) * 2.6,
+          dir.z * (7 + Math.random() * 10) + (Math.random() - 0.5) * spread * 9,
         ),
-        color: Math.random() > 0.4 ? 0xffc868 : 0xff8030,
-        life: 0.1 + Math.random() * 0.1,
-        size: 0.34, sizeEnd: 0.04, gravity: 0, drag: 4,
+        color: Math.random() > 0.4 ? 0xffe6a0 : 0xff7a28,
+        life: 0.08 + Math.random() * 0.12,
+        size: 0.3 * scale, sizeEnd: 0.02, gravity: -3, drag: 4,
+      });
+    }
+    // sbuffo di fumo che si gonfia e si allontana dalla canna (pool alpha)
+    for (let i = 0; i < 3; i++) {
+      this.alpha.emit({
+        pos: this._tmp.set(pos.x + dir.x * 0.2, pos.y + 0.05, pos.z + dir.z * 0.2),
+        vel: this._tmp2.set(
+          dir.x * (1.2 + Math.random() * 1.8) + (Math.random() - 0.5) * 1.2,
+          0.5 + Math.random() * 0.9,
+          dir.z * (1.2 + Math.random() * 1.8) + (Math.random() - 0.5) * 1.2,
+        ),
+        color: 0x6b6660, life: 0.3 + Math.random() * 0.3,
+        size: 0.14 * scale, sizeEnd: 0.5 * scale, gravity: 0.4, drag: 2.2,
+      });
+    }
+  }
+
+  /** Impatto del proiettile: piccolo lampo di scintille (sul bersaglio o sul terreno). */
+  bulletImpact(pos, colorHex = 0xffd9a0) {
+    for (let i = 0; i < 6; i++) {
+      this.additive.emit({
+        pos,
+        vel: this._tmp.set((Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6),
+        color: colorHex, life: 0.1 + Math.random() * 0.14,
+        size: 0.15, sizeEnd: 0.01, gravity: -10, drag: 1.5,
+      });
+    }
+  }
+
+  /** Raffica d'aria all'avvio dello scatto: onda a terra + cono di vento all'indietro. */
+  dashBurst(pos, dir) {
+    this.ring(pos, 0x9fe8ff, 3.4, 0.34);
+    for (let i = 0; i < 16; i++) {
+      const side = (Math.random() - 0.5);
+      const sp = 6 + Math.random() * 8;
+      this.additive.emit({
+        pos: this._tmp.set(pos.x - dir.x * 0.2, 0.5 + Math.random() * 1.2, pos.z - dir.z * 0.2),
+        vel: this._tmp2.set(
+          -dir.x * sp - dir.z * side * 7,
+          (Math.random() - 0.3) * 1.6,
+          -dir.z * sp + dir.x * side * 7,
+        ),
+        color: Math.random() > 0.5 ? 0xcdf2ff : 0x7fd0ff,
+        life: 0.2 + Math.random() * 0.18, size: 0.46, sizeEnd: 0.02, gravity: 0, drag: 3.4,
+      });
+    }
+    this.dirt(pos, 8);
+  }
+
+  /** Scia d'aria continua durante lo scatto: vento all'indietro, soffio laterale, polvere. */
+  dashTrail(pos, dir) {
+    for (let i = 0; i < 2; i++) {
+      const side = (i === 0 ? 1 : -1) * (0.6 + Math.random() * 0.9);
+      this.additive.emit({
+        pos: this._tmp.set(pos.x - dir.x * 0.3, 0.7 + Math.random() * 0.8, pos.z - dir.z * 0.3),
+        vel: this._tmp2.set(
+          -dir.x * (4 + Math.random() * 4) - dir.z * side * 3,
+          0.2 + Math.random() * 0.4,
+          -dir.z * (4 + Math.random() * 4) + dir.x * side * 3,
+        ),
+        color: 0x9fe0ff, life: 0.26, size: 0.5, sizeEnd: 0.03, gravity: 0, drag: 2.6,
+      });
+    }
+    // velo spettrale del corpo
+    this.additive.emit({
+      pos: this._tmp.set(pos.x, 0.95, pos.z),
+      vel: this._tmp2.set(0, 0.2, 0),
+      color: 0x5ad0ff, life: 0.3, size: 0.55, sizeEnd: 0.04, gravity: 0, drag: 2,
+    });
+    // polvere sollevata che resta indietro
+    if (Math.random() < 0.7) {
+      this.alpha.emit({
+        pos: this._tmp.set(pos.x - dir.x * 0.4, 0.06, pos.z - dir.z * 0.4),
+        vel: this._tmp2.set(-dir.x * 1.5 + (Math.random() - 0.5) * 1.5, 0.6 + Math.random() * 1.2, -dir.z * 1.5 + (Math.random() - 0.5) * 1.5),
+        color: 0x6a5a44, life: 0.4, size: 0.2, sizeEnd: 0.02, gravity: -8, drag: 1.2,
       });
     }
   }
@@ -404,6 +547,16 @@ export class Effects {
     for (const l of this.flashLights) {
       if (l.intensity > 0.01) l.intensity *= Math.pow(0.0001, dt * 16);
       else l.intensity = 0;
+    }
+    for (const f of this.muzzleFlashes) {
+      if (!f.life) continue;
+      f.life -= dt;
+      const k = Math.max(0, f.life / f.maxLife);
+      // breve apparizione luminosa che si espande mentre svanisce
+      const s = f.baseScale * (1.5 - 0.5 * k);
+      f.sprite.scale.set(s, s, 1);
+      f.sprite.material.opacity = k;
+      if (f.life <= 0) { f.life = 0; f.sprite.visible = false; }
     }
     for (const t of this.tracers) {
       if (!t.life) continue;

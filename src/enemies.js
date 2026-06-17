@@ -135,7 +135,7 @@ export class Enemy {
     game.effects.spawnPillar(pos, b ? b.tint : 0x76ff8a, b ? 2.2 : 1);
     game.effects.dirt(pos, b ? 30 : 14);
     if (b) Audio.playAt('boss_roar', pos, game.playerPos(), { vol: 1.2 });
-    else Audio.playAt('zombie_growl', pos, game.playerPos(), { vol: 0.8 });
+    else Audio.playAt('zombie_growl', pos, game.playerPos(), { vol: 0.8, pitchVar: 0.14, volVar: 0.2 });
   }
 
   get pos() { return this.root.position; }
@@ -160,7 +160,7 @@ export class Enemy {
     g.effects.blood(hitPos, dir, crit ? 16 : 9);
     g.effects.damageNumber(this.pos, String(Math.round(dmg)), '#ffd887', crit);
     if (Math.random() < 0.35) g.effects.bloodDecal(this.pos);
-    Audio.playAt(crit ? 'crit' : 'hit_flesh', this.pos, g.playerPos(), { vol: 0.9 });
+    Audio.playAt(crit ? 'crit' : 'hit_flesh', this.pos, g.playerPos(), { vol: 0.9, pitchVar: 0.12, volVar: 0.18 });
 
     if (!this.boss && knock > 0) {
       this.kb.addScaledVector(dir, knock * 0.6);
@@ -186,7 +186,7 @@ export class Enemy {
     const g = this.game;
     g.effects.blood(_v1.set(this.pos.x, 1, this.pos.z), dir, 22);
     g.effects.bloodDecal(this.pos, this.boss ? 2.2 : 1.3);
-    Audio.playAt('zombie_death', this.pos, g.playerPos(), { vol: 1 });
+    Audio.playAt('zombie_death', this.pos, g.playerPos(), { vol: 1, pitchVar: 0.14, volVar: 0.18 });
     if (this.bossLight) this.bossLight.intensity = 0;
 
     const d = this.anim.play('death', { once: true, fade: 0.12 });
@@ -285,7 +285,7 @@ export class Enemy {
         this.growlTimer -= dt;
         if (this.growlTimer <= 0) {
           this.growlTimer = 4 + Math.random() * 7;
-          Audio.playAt('zombie_growl', this.pos, pp, { vol: 0.65, rate: this.boss ? 0.7 : 1 });
+          Audio.playAt('zombie_growl', this.pos, pp, { vol: 0.65, rate: this.boss ? 0.7 : 1, pitchVar: 0.16, volVar: 0.22 });
         }
 
         if (this.procedural) this._proceduralWalk();
@@ -347,7 +347,7 @@ export class Enemy {
     const d = this.anim.play(purpose, { once: true, fade: 0.12 });
     this.attackDuration = d ?? this.def.attackTime;
     this.attackHitAt = this.def.hitTime * (this.attackDuration / this.def.attackTime);
-    Audio.playAt(this.def.ranged ? 'spit' : 'zombie_attack', this.pos, this.game.playerPos(), { vol: 0.9 });
+    Audio.playAt(this.def.ranged ? 'spit' : 'zombie_attack', this.pos, this.game.playerPos(), { vol: 0.9, pitchVar: 0.13, volVar: 0.18 });
   }
 
   _proceduralWalk() {

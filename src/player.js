@@ -10,8 +10,16 @@ import { resolveCollisions } from './enemies.js';
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _zAxis = new THREE.Vector3(0, 0, 1); // asse di riferimento per orientare i proiettili
 
+// Campione di ricarica per arma (registrazioni reali CC0, corte).
 const RELOAD_SOUNDS = { pistol: 'reload_pistol', shotgun: 'shotgun_pump', smg: 'reload_rifle', magnum: 'reload_rifle' };
+
+// Calibrazione dell'aggancio dell'arma alla mano. Anchor nel palmo (frazione polso->nocca)
+// + offset fini nella base dell'arma (x=lato, y=su, z=avanti). lateralSign/upSign correggono
+// l'orientamento se la base esce rovesciata. Esposto su window.__GUNCAL per il tuning live.
+const GUN_CAL = { palm: 0.5, x: 0.0, y: -0.04, z: 0.02, lateralSign: 1, upSign: 1, muzzle: 0.5 };
+if (typeof window !== 'undefined') window.__GUNCAL = GUN_CAL;
 
 export class Player {
   constructor(game) {
@@ -35,7 +43,7 @@ export class Player {
     this._stepT = 0; // cadenza dei passi
     this.bullets = [];
     this._bulletMats = new Map();
-    this._bulletGeo = new THREE.SphereGeometry(0.07, 6, 6);
+    this._bulletGeo = new THREE.SphereGeometry(0.06, 8, 6); // stirata in un dardo tracciante
 
     // ---- modello ----
     this.root = new THREE.Group();
@@ -52,17 +60,22 @@ export class Player {
       });
       // mano (impugnatura) e avambraccio del braccio che mira: il braccio destro
       // è quello esteso nelle pose con arma. La direzione gomito->mano orienta l'arma.
-      this.handBone = this.model.getObjectByName('Middle1.R')
+      this.handBone = this.model.getObjectByName('Middle1.R')   // nocca del medio (avanti nella mano)
         || this.model.getObjectByName('Middle1.L')
         || this.model.getObjectByName('LowerArm.R');
-      this.armBone = this.model.getObjectByName('LowerArm.R')
+      this.armBone = this.model.getObjectByName('LowerArm.R')    // polso (radice delle dita)
         || this.model.getObjectByName('LowerArm.L')
         || this.model.getObjectByName('Shoulder.R');
+      // indice e mignolo: la loro differenza dà l'asse laterale della mano -> ROLL reale
+      this.indexBone = this.model.getObjectByName('Index1.R') || this.model.getObjectByName('Index1.L');
+      this.pinkyBone = this.model.getObjectByName('Pinky1.R') || this.model.getObjectByName('Pinky1.L');
     } else {
       this.model = makeProceduralSoldier();
       this.anim = new Animator(this.model, []);
       this.handBone = null;
       this.armBone = null;
+      this.indexBone = null;
+      this.pinkyBone = null;
     }
     this.root.add(this.model);
 
@@ -74,7 +87,11 @@ export class Player {
     this._gunPos = new THREE.Vector3();
     this._handPos = new THREE.Vector3();
     this._elbowPos = new THREE.Vector3();
+    this._indexPos = new THREE.Vector3();
+    this._pinkyPos = new THREE.Vector3();
     this._armDir = new THREE.Vector3();
+    this._lat = new THREE.Vector3();
+    this._anchor = new THREE.Vector3();
     this._ux = new THREE.Vector3();
     this._uy = new THREE.Vector3();
     this._uz = new THREE.Vector3();
@@ -124,28 +141,56 @@ export class Player {
     }
   }
 
-  /** Mette l'arma sulla mano, orientata lungo l'avambraccio; segue il braccio. */
+  /**
+   * Aggancia l'arma alla mano seguendone posizione E rotazione reali (roll compreso).
+   * La base ortonormale è costruita dalle ossa: canna = polso->nocca, lato = mignolo->indice.
+   * Così l'arma resta saldata nel pugno in ogni posa (idle/cammina/corri) e ne segue
+   * la modulazione del braccio con precisione. L'arma è ancorata nel palmo, non sulla nocca.
+   */
   _updateGun() {
     this.gunMount.visible = !this.dead;
     if (this.dead) return;
     if (this.handBone && this.armBone) {
-      this.handBone.getWorldPosition(this._handPos);
-      this.armBone.getWorldPosition(this._elbowPos);
-      // direzione dell'avambraccio (gomito -> mano)
+      this.handBone.getWorldPosition(this._handPos);    // nocca del medio
+      this.armBone.getWorldPosition(this._elbowPos);     // polso
+      // +Z (canna) = direzione della mano (polso -> nocca)
       this._armDir.subVectors(this._handPos, this._elbowPos);
       if (this._armDir.lengthSq() < 1e-6) this._armDir.set(this.aimDir.x, 0, this.aimDir.z);
-      this._armDir.normalize();
-      // base ortonormale: +Z lungo il braccio (canna), +Y verso l'alto
-      const z = this._uz.copy(this._armDir);
-      const x = this._ux.crossVectors(this._uy.set(0, 1, 0), z);
-      if (x.lengthSq() < 1e-5) x.set(1, 0, 0);
-      x.normalize();
-      const y = this._uy.crossVectors(z, x).normalize();
+      const z = this._uz.copy(this._armDir).normalize();
+
+      // asse laterale della mano dalle dita (mignolo -> indice): porta il ROLL reale del polso.
+      // Fallback al "su" del mondo se le ossa delle dita mancano.
+      const cal = GUN_CAL;
+      let haveLat = false;
+      if (this.indexBone && this.pinkyBone) {
+        this.indexBone.getWorldPosition(this._indexPos);
+        this.pinkyBone.getWorldPosition(this._pinkyPos);
+        this._lat.subVectors(this._indexPos, this._pinkyPos).multiplyScalar(cal.lateralSign);
+        haveLat = this._lat.lengthSq() > 1e-7;
+      }
+      let x;
+      if (haveLat) {
+        // x = lato ortogonalizzato rispetto alla canna
+        x = this._ux.copy(this._lat).addScaledVector(z, -this._lat.dot(z));
+        if (x.lengthSq() < 1e-6) x.set(1, 0, 0);
+        x.normalize();
+      } else {
+        x = this._ux.crossVectors(this._uy.set(0, 1, 0), z);
+        if (x.lengthSq() < 1e-5) x.set(1, 0, 0);
+        x.normalize();
+      }
+      const y = this._uy.crossVectors(z, x).multiplyScalar(cal.upSign).normalize();
+      // ricomponi x per garantire una terna destrorsa pulita
+      x.crossVectors(y, z).normalize();
       this._basis.makeBasis(x, y, z);
-      this.gunMount.position.copy(this._handPos);
+
+      // ancora nel palmo (tra polso e nocca) + calibrazione fine nella base dell'arma
+      this._anchor.lerpVectors(this._elbowPos, this._handPos, cal.palm);
+      this.gunMount.position.copy(this._anchor)
+        .addScaledVector(x, cal.x).addScaledVector(y, cal.y).addScaledVector(z, cal.z);
       this.gunMount.quaternion.setFromRotationMatrix(this._basis);
-      // bocca della canna (per il muzzle)
-      this._gunPos.copy(this._handPos).addScaledVector(z, 0.5);
+      // bocca della canna (per il muzzle e l'origine dei proiettili)
+      this._gunPos.copy(this.gunMount.position).addScaledVector(z, cal.muzzle);
     } else {
       this._gunPos.set(
         this.pos.x + this.aimDir.x * 0.45 + this.aimDir.z * 0.18,
@@ -199,7 +244,7 @@ export class Player {
     const w = this.ammo;
     if (this.reloadT > 0 || w.mag >= def.mag || w.reserve <= 0 || this.dead) return;
     this.reloadT = def.reload;
-    Audio.play(RELOAD_SOUNDS[this.current] || 'reload_pistol', { vol: 0.8 });
+    Audio.play(RELOAD_SOUNDS[this.current] || 'reload_pistol', { vol: 0.85, pitchVar: 0.04 });
     this.game.ui.reloading(true);
   }
 
@@ -210,7 +255,7 @@ export class Player {
     const g = this.game;
     g.effects.addTrauma(0.42);
     g.effects.blood(_v1.set(this.pos.x, 1.2, this.pos.z), _v2.set(this.pos.x - fromPos.x, 0, this.pos.z - fromPos.z).normalize(), 8);
-    Audio.play('hurt', { vol: 0.9 });
+    Audio.play('hurt', { vol: 0.9, pitchVar: 0.08, volVar: 0.12 });
     g.ui.damageFlash();
     g.ui.health(this.hp, this.maxHp);
     if (this.hp <= 0) {
@@ -261,18 +306,14 @@ export class Player {
       this.iframes = Math.max(this.iframes, CONFIG.player.dashIFrames);
       this.dashDir.set(moving ? mx / ml : this.aimDir.x, 0, moving ? mz / ml : this.aimDir.z);
       Audio.play('dash', { vol: 0.7 });
+      g.effects.dashBurst(this.pos, this.dashDir); // raffica d'aria + onda a terra
       g.ui.stamina(this.dashCharges);
     }
 
     if (this.dashT > 0) {
       this.dashT -= dt;
       this.pos.addScaledVector(this.dashDir, CONFIG.player.dashSpeed * dt);
-      // scia spettrale
-      g.effects.additive.emit({
-        pos: _v1.set(this.pos.x, 0.9, this.pos.z),
-        vel: _v2.set(0, 0.3, 0),
-        color: 0x5ad0ff, life: 0.3, size: 0.5, sizeEnd: 0.05, gravity: 0, drag: 2,
-      });
+      g.effects.dashTrail(this.pos, this.dashDir); // vento che sfreccia + polvere
     } else {
       const sp = CONFIG.player.speed;
       this.vel.x = THREE.MathUtils.damp(this.vel.x, (mx / ml) * sp, 12, dt);
@@ -297,7 +338,8 @@ export class Player {
       if (this._stepT <= 0) {
         const running = spd > 5.5;
         this._stepT = running ? 0.28 : 0.46;
-        Audio.play('step', { vol: running ? 0.5 : 0.34, rate: 0.92 + Math.random() * 0.16 });
+        // ampia variazione di intonazione + volume: ogni passo suona diverso
+        Audio.play('step', { vol: running ? 0.5 : 0.36, pitchVar: 0.18, volVar: 0.3 });
       }
     } else {
       this._stepT = 0.1; // primo passo quasi immediato quando riparte
@@ -375,6 +417,8 @@ export class Player {
       }
       const mesh = new THREE.Mesh(this._bulletGeo, mat);
       mesh.position.copy(muzzle);
+      mesh.quaternion.setFromUnitVectors(_zAxis, dir); // dardo orientato lungo la traiettoria
+      mesh.scale.set(0.75, 0.75, 3.8);
       g.scene.add(mesh);
       this.bullets.push({
         mesh, prev: muzzle.clone(), vel: dir.clone().multiplyScalar(def.speed),
@@ -385,7 +429,7 @@ export class Player {
     }
     g.stats.shots += def.pellets;
 
-    g.effects.muzzle(muzzle, this.aimDir, def.light);
+    g.effects.muzzle(muzzle, this.aimDir, def.light, 1 + def.shake * 1.8);
     g.effects.addTrauma(def.shake);
     Audio.play('shot_' + def.id, { vol: 0.85 });
     // rinculo visivo della camera gestito dal trauma; piccolo arretramento del corpo
@@ -400,6 +444,12 @@ export class Player {
       b.life -= dt;
       b.prev.copy(b.mesh.position);
       b.mesh.position.addScaledVector(b.vel, dt);
+      // scia luminosa del tracciante (alone che si dissolve dietro il dardo)
+      g.effects.additive.emit({
+        pos: b.mesh.position,
+        vel: _v2.set(0, 0, 0),
+        color: b.color, life: 0.1, size: 0.15, sizeEnd: 0.01, gravity: 0, drag: 1,
+      });
 
       // collisione segmento-cerchio con i nemici
       const px = b.prev.x, pz = b.prev.z;
@@ -424,6 +474,8 @@ export class Player {
         const dir = _v2.set(b.vel.x, 0, b.vel.z).normalize();
         best.takeDamage(dmg, dir, { crit, knock: b.knock });
         g.stats.hits++;
+        // lampo d'impatto del proiettile sul bersaglio
+        g.effects.bulletImpact(_v1.set(b.mesh.position.x, Math.max(0.5, best.pos.y + 0.9), b.mesh.position.z), b.color);
         if (b.pierce > 0) {
           b.pierce--;
           b.dmg *= 0.75;

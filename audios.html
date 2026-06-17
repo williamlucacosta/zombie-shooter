@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOTTE DELL'ORDA — Audio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🔊</text></svg>" />
+  <style>
+    :root { --blood: #c41e1e; --bone: #e8e0cc; --toxic: #8aff5a; --amber: #ffb84d; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #07060b; color: var(--bone); font-family: 'Segoe UI', Roboto, sans-serif; }
+    body { padding: 28px 22px 80px; max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 26px; color: var(--blood); letter-spacing: .04em; }
+    h1 small { color: #71798c; font-size: 13px; font-weight: 400; letter-spacing: .2em; }
+    .sub { color: #8b94a8; font-size: 13px; margin: 6px 0 18px; line-height: 1.5; }
+
+    .bar {
+      position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px;
+      background: #0c0a12; border: 1px solid #2a2233; border-radius: 8px; padding: 12px 16px; margin-bottom: 22px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.5);
+    }
+    #enable {
+      font-size: 15px; letter-spacing: .06em; color: var(--bone); cursor: pointer;
+      background: linear-gradient(180deg, #3a0d0d, #1d0606); border: 1px solid #7e2222;
+      border-radius: 6px; padding: 9px 22px; transition: transform .1s, box-shadow .2s;
+    }
+    #enable:hover { transform: scale(1.04); box-shadow: 0 0 18px rgba(196,30,30,.5); }
+    #enable.ready { background: linear-gradient(180deg, #123a18, #06200c); border-color: #2f7e3a; cursor: default; }
+    .vol { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa3b8; }
+    .vol input { accent-color: var(--blood); width: 130px; }
+    #status { font-size: 12px; color: #71798c; margin-left: auto; }
+    #stop { font-size: 12px; color: #9aa3b8; background: #1a1320; border: 1px solid #33203a; border-radius: 5px; padding: 7px 14px; cursor: pointer; }
+    #stop:hover { color: var(--bone); border-color: #7e2222; }
+
+    .group { margin-bottom: 26px; }
+    .group > h2 { font-size: 14px; letter-spacing: .18em; color: var(--amber); text-transform: uppercase; margin-bottom: 4px; }
+    .group > .ghint { font-size: 12px; color: #71798c; margin-bottom: 12px; font-style: italic; }
+    .row { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid #16131d; flex-wrap: wrap; }
+    .row .name { width: 230px; min-width: 230px; font-size: 14px; color: var(--bone); }
+    .row .name small { display: block; color: #6c7488; font-size: 11px; letter-spacing: .04em; }
+    .clips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .clip {
+      font-size: 12px; color: #cfd6e6; background: #14111c; border: 1px solid #2c2438; border-radius: 5px;
+      padding: 6px 12px; cursor: pointer; transition: background .12s, border-color .12s, transform .06s; font-variant-numeric: tabular-nums;
+    }
+    .clip:hover { background: #20192c; border-color: #5a4470; }
+    .clip:active { transform: scale(.95); }
+    .clip.lit { background: #2a1c10; border-color: var(--amber); color: #ffe6b8; }
+    .clip .fn { color: #8b94a8; font-size: 10px; margin-left: 6px; }
+    .clip.proc { border-color: #2f5a7e; }
+    .clip.proc:hover { background: #14202c; border-color: #4a86c0; }
+    .tag { font-size: 10px; letter-spacing: .12em; padding: 2px 7px; border-radius: 99px; vertical-align: middle; }
+    .tag.use { background: #103a18; color: var(--toxic); border: 1px solid #2f7e3a; }
+    .tag.unused { background: #2a1010; color: #d98; border: 1px solid #6a2a2a; }
+    .note { font-size: 12px; color: #8b94a8; background: #0e0c14; border-left: 3px solid #5a4470; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 4px 0 0; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>NOTTE DELL'ORDA &nbsp;<small>BANCO PROVA AUDIO</small></h1>
+  <p class="sub">
+    Ogni pulsante riproduce il suono attraverso il <b>vero motore audio del gioco</b> (stesso bus SFX + riverbero).
+    I campioni multi-variante (ringhi, passi…) sono elencati uno per uno: clicca e dimmi quale <b>file</b> non ti piace.
+    In gioco viene applicata anche una variazione casuale di intonazione; qui senti il file pulito.
+  </p>
+
+  <div class="bar">
+    <button id="enable">▶ ATTIVA AUDIO</button>
+    <label class="vol">VOLUME <input id="vol" type="range" min="0" max="100" value="80" /></label>
+    <button id="stop">■ stop loop</button>
+    <span id="status">premi «Attiva audio» per caricare i campioni</span>
+  </div>
+
+  <div id="list"></div>
+
+  <script type="module" src="/src/audios.js"></script>
+</body>
+</html>

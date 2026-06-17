@@ -8,10 +8,11 @@ aberrazione cromatica, vignettatura) e asset 3D/audio professionali CC0.
 
 ```bash
 npm install
-npm run dev      # apri http://localhost:5173
+npm run dev      # apri http://localhost:3210
 ```
 
 Build di produzione: `npm run build`, poi `npm run preview`.
+Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
 
 | Comando | Azione |
 |---|---|
@@ -59,14 +60,21 @@ Build di produzione: `npm run build`, poi `npm run preview`.
 - **Texture terreno**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock — CC0
 - **Spari (registrazioni reali premium)**: Still North "Free Firearm Sound Library"
   ([buddingmonkey/FreeFirearmsSFXLibrary](https://github.com/buddingmonkey/FreeFirearmsSFXLibrary)) —
-  Colt 1911, Mossberg, AR-15, Smith & Wesson 642 — CC0
+  Walther PPQ, Mossberg, AR-15, Smith & Wesson 642 — CC0
+- **Ricariche** (pistola/fucile/pompa), **impatti su carne · critici · splatter**, **sputo**,
+  **whoosh dello scatto**, **grugniti di dolore**, **raccolta oggetti/armi**, **inizio ondata**:
+  pacchetti CC0 da [OpenGameArt](https://opengameart.org) (rubberduck "100 CC0 SFX",
+  Independent.nu "wet squish impacts", "Swishes", "water/splash/slime", "Handgun/Gun reload",
+  "male strain/hurt", "Oldschool Horror Theme") — CC0
+- **Tuoni/fulmini** ("Storm thunderbolts") e **schianto del boss** (esplosione): registrazioni
+  reali da [Wikimedia Commons](https://commons.wikimedia.org) — Pubblico Dominio
 - **Pioggia**: Ylmir "Rain (loopable)" — CC0; **Passi**: TinyWorlds "Different steps" — CC0;
   **Musica** "The Surreal Truth" di Joth — CC0; **ruggito boss** di trazzz123 — CC0;
-  **voci zombi/ricariche/battito** da artisticdude, saturn91, SpringySpringo, bart — CC0;
-  **suoni UI** di [Kenney](https://kenney.nl) — CC0; tutti da [OpenGameArt](https://opengameart.org)
-- **Tuoni**: "thunderclap" di **Jerimee** (OpenGameArt) — **CC-BY 3.0** (unico asset con
-  obbligo di attribuzione)
+  **voci zombi/battito** da artisticdude, saturn91, SpringySpringo, bart — CC0;
+  **suoni UI e jingle "ondata completata"** di [Kenney](https://kenney.nl) — CC0; da [OpenGameArt](https://opengameart.org)
 - **Font**: Creepster — SIL Open Font License (Google Fonts)
+
+Tutti gli asset audio sono ora **CC0 o Pubblico Dominio**: nessun obbligo di attribuzione.
 
 ## Struttura
 

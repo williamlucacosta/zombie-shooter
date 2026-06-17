@@ -33,7 +33,7 @@ const audio = await page.evaluate(() => {
   const g = (k) => (a.buffers.get(k) || []).length;
   return { step: g('step'), pistol: g('shot_pistol'), shotgun: g('shot_shotgun'), rain: g('rain_loop') };
 });
-check('passi caricati (4)', audio.step === 4, JSON.stringify(audio));
+check('passi caricati (3)', audio.step === 3, JSON.stringify(audio));
 check('gunshot premium e pioggia caricati', audio.pistol && audio.shotgun && audio.rain, JSON.stringify(audio));
 
 // musica: volume iniziale calibrato (default basso)

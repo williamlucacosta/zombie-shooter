@@ -1,0 +1,12 @@
+import puppeteer from 'puppeteer-core';
+const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox','--mute-audio','--autoplay-policy=no-user-gesture-required'], defaultViewport: { width: 1040, height: 1000 } });
+const p = await b.newPage();
+await p.goto('http://localhost:3210/audios', { waitUntil: 'networkidle2', timeout: 60000 });
+await p.click('#enable');
+await p.waitForFunction(() => document.getElementById('status').textContent.includes('pronti'), { timeout: 30000 });
+await sleep(300);
+await p.screenshot({ path: 'tools/audios_page.png', fullPage: true });
+await b.close();
+console.log('ok');

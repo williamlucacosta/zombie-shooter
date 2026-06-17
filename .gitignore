@@ -10,5 +10,7 @@ dist/
 .DS_Store
 
 # screenshot generati dai test headless
-tools/shot_*.png
-tools/wpn_*.png
+tools/*.png
+
+# staging audio (sorgenti grezze, non committare)
+tools/_audiosrc/
