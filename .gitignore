@@ -1,0 +1,13 @@
+# dipendenze
+node_modules/
+
+# build
+dist/
+
+# log e cache
+*.log
+.vite/
+.DS_Store
+
+# screenshot generati dai test headless
+tools/shot_*.png
