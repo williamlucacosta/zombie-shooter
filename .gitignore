@@ -11,3 +11,4 @@ dist/
 
 # screenshot generati dai test headless
 tools/shot_*.png
+tools/wpn_*.png

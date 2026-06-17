@@ -44,16 +44,27 @@ export class Player {
       this.model.scale.setScalar(entry.scale);
       this.model.rotation.y = entry.yaw;
       this.anim = new Animator(this.model, entry.animations);
+      // Il modello "Sam" include un'ascia agganciata alla mano sinistra:
+      // la nascondiamo perché equipaggeremo i modelli reali delle armi da fuoco.
+      this.model.traverse((o) => {
+        if (o.isMesh && /axe|sword|blade|knife|melee|hammer/i.test(o.name)) o.visible = false;
+      });
+      // osso della mano che impugna l'arma (lo stesso a cui era agganciata l'ascia)
+      this.handBone = this.model.getObjectByName('Middle1.L')
+        || this.model.getObjectByName('Middle1.R')
+        || this.model.getObjectByName('LowerArm.R');
     } else {
       this.model = makeProceduralSoldier();
       this.anim = new Animator(this.model, []);
+      this.handBone = null;
     }
     this.root.add(this.model);
 
-    // attacco arma (all'altezza del fianco, ruota con il personaggio)
+    // L'arma vive nella scena e ogni frame segue l'osso della mano,
+    // ma è orientata verso la mira (la canna punta dove spari).
     this.gunMount = new THREE.Group();
-    this.gunMount.position.set(0.24, 1.0, 0.3);
-    this.root.add(this.gunMount);
+    game.scene.add(this.gunMount);
+    this._gunPos = new THREE.Vector3();
     this._mountGun('pistol');
 
     // luce calda personale: tiene leggibile l'eroe nel buio
@@ -73,28 +84,49 @@ export class Player {
     while (this.gunMount.children.length) this.gunMount.remove(this.gunMount.children[0]);
     const def = WEAPONS[id];
     const entry = Assets.guns.get(id);
-    let gun;
+    // gun ruotato così che la canna guardi +Z (avanti), poi ricentrato sull'impugnatura
     if (entry) {
-      gun = entry.scene.clone();
+      const gun = entry.scene.clone();
       const box = new THREE.Box3().setFromObject(gun);
       const size = box.getSize(_v1);
-      // orienta l'asse più lungo del modello verso +Z (avanti)
+      // l'asse più lungo del modello è la canna: portalo lungo +Z
       if (size.x >= size.y && size.x >= size.z) gun.rotation.y = -Math.PI / 2;
       else if (size.y >= size.x && size.y >= size.z) gun.rotation.x = Math.PI / 2;
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
       gun.scale.setScalar(entry.length / maxDim);
+      gun.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
       const wrap = new THREE.Group();
       wrap.add(gun);
-      // ricentra
-      const box2 = new THREE.Box3().setFromObject(wrap);
-      const c = box2.getCenter(_v2);
+      // ricentra sull'origine, poi spingi avanti così la mano impugna la parte posteriore
+      const c = new THREE.Box3().setFromObject(wrap).getCenter(_v2);
       gun.position.sub(c);
+      gun.position.z += entry.length * 0.28;
+      gun.position.y -= 0.05;
       this.gunMount.add(wrap);
     } else {
-      gun = makeRifle();
+      const gun = makeRifle();
       gun.scale.setScalar(def.slot === 1 ? 0.7 : 1);
+      gun.position.z += 0.2;
       this.gunMount.add(gun);
     }
+  }
+
+  /** Posiziona l'arma sulla mano e la orienta verso la mira. */
+  _updateGun() {
+    if (this.dead) { this.gunMount.visible = false; return; }
+    this.gunMount.visible = true;
+    if (this.handBone) {
+      this.handBone.getWorldPosition(this._gunPos);
+    } else {
+      // fallback (soldato procedurale): davanti e leggermente a destra del corpo
+      this._gunPos.set(
+        this.pos.x + this.aimDir.x * 0.45 + this.aimDir.z * 0.18,
+        1.05,
+        this.pos.z + this.aimDir.z * 0.45 - this.aimDir.x * 0.18,
+      );
+    }
+    this.gunMount.position.copy(this._gunPos);
+    this.gunMount.rotation.set(0, Math.atan2(this.aimDir.x, this.aimDir.z), 0);
   }
 
   giveWeapon(id) {
@@ -165,7 +197,7 @@ export class Player {
   update(dt, input, aim, enemies) {
     const g = this.game;
     this.anim.update(dt);
-    if (this.dead) { this._updateBullets(dt, enemies); return; }
+    if (this.dead) { this.gunMount.visible = false; this._updateBullets(dt, enemies); return; }
 
     this.iframes = Math.max(0, this.iframes - dt);
 
@@ -173,6 +205,7 @@ export class Player {
     this.aimDir.set(aim.x - this.pos.x, 0, aim.z - this.pos.z);
     if (this.aimDir.lengthSq() > 0.01) this.aimDir.normalize();
     this.root.rotation.y = Math.atan2(this.aimDir.x, this.aimDir.z);
+    this._updateGun();
 
     // ---- scatto ----
     if (this.dashRegen > 0) {
@@ -279,10 +312,11 @@ export class Player {
     this.fireTimer = def.rof;
     this.ammo.mag--;
 
+    // i proiettili partono dalla punta della canna (posizione mano + avanti)
     const muzzle = _v1.set(
-      this.pos.x + this.aimDir.x * 1.0,
-      1.15,
-      this.pos.z + this.aimDir.z * 1.0,
+      this._gunPos.x + this.aimDir.x * 0.95,
+      Math.max(0.7, this._gunPos.y),
+      this._gunPos.z + this.aimDir.z * 0.95,
     ).clone();
 
     for (let p = 0; p < def.pellets; p++) {

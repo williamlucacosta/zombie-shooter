@@ -190,6 +190,7 @@ Audio.init(); // contesto sospeso finché l'utente non clicca
 })();
 
 window.__game = game; // diagnostica
+window.__CONFIG = CONFIG; // permette test/tuning della camera a runtime
 
 // ------------------------------------------------------------- pulsanti --
 
