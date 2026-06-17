@@ -33,36 +33,49 @@ Build di produzione: `npm run build`, poi `npm run preview`.
 - **Boss ogni 5 ondate**: IL CARNEFICE (carica + schianto), L'EVOCATORE (evoca
   servitori + raffica acida), IL DIVORATORE (tutte le abilità), con barra vita
   dedicata e telegrafi a terra.
-- **4 armi**: Pistola (infinita), Fucile a pompa (ondata 3), Mitra (ondata 6),
-  Magnum perforante (ondata 9) — drop garantiti, munizioni e medikit dai nemici.
+- **4 armi col modello in mano**: Pistola (infinita), Fucile a pompa (ondata 3),
+  Mitra (ondata 6), Magnum perforante (ondata 9) — l'arma equipaggiata è impugnata
+  e punta verso la mira; drop garantiti, munizioni e medikit dai nemici.
+- **4 difficoltà** (Facile / Normale / Difficile / Incubo): scalano vita, velocità
+  e danno dei nemici, densità dell'orda e vita del giocatore — ma soprattutto il
+  **dash** (cariche, ricarica, invulnerabilità), così a Incubo schivare diventa una
+  risorsa rara da dosare con precisione.
+- **Temporali realistici occasionali**: scrosci di pioggia spinti dal vento, schizzi
+  a terra, cielo che si fa cupo, fulmini con lampo a scatti e tuono ritardato dalla
+  distanza. Alcune ondate (e certi boss) si combattono sotto l'acqua.
 - **Gli zombi risalgono dalla terra** (gli scheletri si risvegliano con la loro
   animazione dedicata), sangue, decal, numeri di danno, critici, combo, slow-motion
   sui boss, screen-shake, record persistente.
 - **Atmosfera**: luna piena, stelle, nebbia bassa che deriva, lanterne tremolanti,
-  lucciole, traccia ambient post-apocalittica e suoni reali (con synth WebAudio
-  procedurale di riserva per ogni effetto).
+  lucciole, riverbero a convoluzione su spari e impatti, e gunshot da registrazioni
+  reali (con synth WebAudio procedurale di riserva per ogni effetto).
 
-## Crediti asset (tutti CC0 / OFL — nessun obbligo, ma onore al merito)
+## Crediti asset (CC0 salvo dove indicato)
 
 - **Personaggi e armi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
-  (zombi, mutante Big Arm, sopravvissuto Sam, cane, armi) via [poly.pizza](https://poly.pizza)
+  (zombi, mutante Big Arm, sopravvissuto Sam, cane, armi) via [poly.pizza](https://poly.pizza) — CC0
 - **Scheletri e scenografia cimitero**: [Kay Lousberg / KayKit](https://kaylousberg.com) —
-  Skeletons Pack + Halloween Bits
-- **Texture terreno**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock
-- **Audio**: artisticdude (zombi), saturn91 (zomby sfx), kurt (pistole), Tabasco
-  (registrazioni fucili), SpringySpringo (ricariche), bart (battito), trazzz123
-  (ruggito boss), [Juhani Junkala](https://opengameart.org/users/subspaceaudio)
-  ("Post Apocalyptic Wastelands") — tutti da [OpenGameArt](https://opengameart.org);
-  suoni UI di [Kenney](https://kenney.nl)
-- **Font**: Creepster (SIL Open Font License, Google Fonts)
+  Skeletons Pack + Halloween Bits — CC0
+- **Texture terreno**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock — CC0
+- **Spari (registrazioni reali premium)**: Still North "Free Firearm Sound Library"
+  ([buddingmonkey/FreeFirearmsSFXLibrary](https://github.com/buddingmonkey/FreeFirearmsSFXLibrary)) —
+  Colt 1911, Mossberg, AR-15, Smith & Wesson 642 — CC0
+- **Pioggia**: Ylmir "Rain (loopable)" — CC0; **Musica** "The Surreal Truth" di Joth — CC0;
+  **ruggito boss** di trazzz123 — CC0; **voci zombi/ricariche/battito** da artisticdude,
+  saturn91, SpringySpringo, bart — CC0; **suoni UI** di [Kenney](https://kenney.nl) — CC0;
+  tutti da [OpenGameArt](https://opengameart.org)
+- **Tuoni**: "thunderclap" di **Jerimee** (OpenGameArt) — **CC-BY 3.0** (unico asset con
+  obbligo di attribuzione)
+- **Font**: Creepster — SIL Open Font License (Google Fonts)
 
 ## Struttura
 
 ```
-src/config.js   bilanciamento: armi, nemici, ondate, boss, temi
-src/assets.js   caricamento GLB/texture + fallback procedurali + animatore
-src/audio.js    motore WebAudio: file + synth procedurale, bus volumi, ambiente
+src/config.js   bilanciamento: armi, nemici, ondate, boss, temi, difficoltà
+src/assets.js   caricamento GLB/texture (con risorse differite) + animatore
+src/audio.js    motore WebAudio: file OGG + synth, riverbero, bus volumi, pioggia
 src/world.js    arena cimitero, luci, nebbia, cielo
+src/rain.js     pioggia, schizzi, fulmini e tuoni
 src/effects.js  particelle, decal, traccianti, anelli, numeri danno, shake
 src/enemies.js  IA nemici, boss, direttore ondate, proiettili acidi
 src/player.js   movimento, armi, scatto, proiettili

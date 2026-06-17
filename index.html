@@ -53,6 +53,20 @@
       transition: transform .12s ease, box-shadow .2s ease;
     }
     .btn:hover { transform: scale(1.06); box-shadow: 0 0 38px rgba(220,40,30,.6), inset 0 0 18px rgba(0,0,0,.6); }
+    /* selettore difficoltà */
+    #difficulty { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 2px 0; }
+    .diff-label { font-size: 11px; letter-spacing: .35em; color: #71798c; }
+    .diff-options { display: flex; gap: 8px; }
+    .diff-btn {
+      font-family: 'Horror', 'Chiller', cursive; font-size: 19px; letter-spacing: .08em;
+      color: #9aa3b8; background: rgba(20,12,16,.7); border: 1px solid #3a2630; border-radius: 5px;
+      padding: 6px 20px; cursor: pointer; transition: color .15s, border-color .15s, box-shadow .2s, background .2s;
+    }
+    .diff-btn:hover { color: var(--bone); border-color: #7e2222; }
+    .diff-btn.active { color: var(--bone); border-color: var(--blood);
+      background: linear-gradient(180deg, #3a0d0d, #1d0606); box-shadow: 0 0 16px rgba(196,30,30,.4); }
+    #diff-desc { font-size: 12px; color: #8b94a8; font-style: italic; height: 16px; letter-spacing: .08em; }
+
     .controls-hint { display: grid; grid-template-columns: auto auto; gap: 6px 18px; font-size: 14px; color: #8b94a8; margin-top: 6px; }
     .controls-hint b { color: var(--bone); font-weight: 600; text-align: right; }
     .record { font-size: 14px; color: var(--amber); letter-spacing: .2em; }
@@ -195,6 +209,16 @@
   <div id="menu" class="screen">
     <div class="title horror">NOTTE DELL'ORDA</div>
     <div class="subtitle">Sopravvivi alle ondate dei non morti</div>
+    <div id="difficulty">
+      <div class="diff-label">DIFFICOLTÀ</div>
+      <div class="diff-options">
+        <button class="diff-btn" data-diff="facile">FACILE</button>
+        <button class="diff-btn active" data-diff="normale">NORMALE</button>
+        <button class="diff-btn" data-diff="difficile">DIFFICILE</button>
+        <button class="diff-btn" data-diff="incubo">INCUBO</button>
+      </div>
+      <div id="diff-desc">L'esperienza bilanciata</div>
+    </div>
     <div class="loading-bar" id="loading-wrap"><div id="loading-fill"></div></div>
     <div id="loading-label">Caricamento risorse…</div>
     <button id="btn-play" class="btn" style="display:none">GIOCA</button>

@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { getCharacter, makeProceduralZombie, Animator } from './assets.js';
-import { CONFIG, ENEMY_TYPES, waveComposition, WEAPON_UNLOCKS } from './config.js';
+import { CONFIG, ENEMY_TYPES, waveComposition, WEAPON_UNLOCKS, DIFF } from './config.js';
 import { Audio } from './audio.js';
 
 const ARENA_R = CONFIG.arenaRadius;
@@ -534,6 +534,7 @@ export class WaveDirector {
     this.pendingWeapon = WEAPON_UNLOCKS[n] || null;
     this.weaponDropAtKill = this.pendingWeapon ? Math.max(2, Math.floor(this.totalCount * 0.45)) : -1;
     this.spawnTimer = 0.8;
+    this.maxAlive = Math.round(34 * DIFF.maxAlive); // densità dell'orda per difficoltà
     this.active = true;
   }
 
@@ -589,7 +590,7 @@ export class WaveDirector {
             const item = this.queue.shift();
             this.spawnEnemy(item.type, null, { elite: item.elite });
           }
-          this.spawnTimer = 0.55 + Math.random() * 0.5;
+          this.spawnTimer = (0.55 + Math.random() * 0.5) * DIFF.spawnInterval;
         }
       }
     }

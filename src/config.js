@@ -13,6 +13,45 @@ export const CONFIG = {
   critMult: 1.8,
 };
 
+// Livelli di difficoltà. Oltre a HP/velocità/danno dei nemici e densità di spawn,
+// modulano fortemente il DASH (cariche, ricarica, finestra di invulnerabilità):
+// più si sale, più schivare diventa una risorsa preziosa e da dosare con cura.
+export const DIFFICULTIES = {
+  facile: {
+    key: 'facile', label: 'FACILE', desc: 'Una passeggiata tra le tombe',
+    enemyHp: 0.75, enemySpeed: 0.9, enemyDmg: 0.6, spawnInterval: 1.25, maxAlive: 0.8, playerHp: 130,
+    dashCharges: 3, dashCooldown: 1.6, dashIFrames: 0.42,
+  },
+  normale: {
+    key: 'normale', label: 'NORMALE', desc: "L'esperienza bilanciata",
+    enemyHp: 1.0, enemySpeed: 1.0, enemyDmg: 1.0, spawnInterval: 1.0, maxAlive: 1.0, playerHp: 100,
+    dashCharges: 2, dashCooldown: 2.6, dashIFrames: 0.3,
+  },
+  difficile: {
+    key: 'difficile', label: 'DIFFICILE', desc: "L'orda non perdona",
+    enemyHp: 1.45, enemySpeed: 1.12, enemyDmg: 1.5, spawnInterval: 0.78, maxAlive: 1.3, playerHp: 80,
+    dashCharges: 2, dashCooldown: 3.4, dashIFrames: 0.2,
+  },
+  incubo: {
+    key: 'incubo', label: 'INCUBO', desc: 'Sopravvivere è quasi impossibile',
+    enemyHp: 1.9, enemySpeed: 1.3, enemyDmg: 2.0, spawnInterval: 0.6, maxAlive: 1.55, playerHp: 65,
+    dashCharges: 1, dashCooldown: 4.2, dashIFrames: 0.15,
+  },
+};
+
+// Difficoltà attiva (default Normale); applicata da setDifficulty().
+export let DIFF = DIFFICULTIES.normale;
+
+export function setDifficulty(key) {
+  DIFF = DIFFICULTIES[key] || DIFFICULTIES.normale;
+  // i parametri del giocatore (vita + dash) sono letti da player.js a runtime
+  CONFIG.player.hp = DIFF.playerHp;
+  CONFIG.player.dashCharges = DIFF.dashCharges;
+  CONFIG.player.dashCooldown = DIFF.dashCooldown;
+  CONFIG.player.dashIFrames = DIFF.dashIFrames;
+  return DIFF;
+}
+
 export const WEAPONS = {
   pistol: {
     id: 'pistol', slot: 1, name: 'PISTOLA', dmg: 14, rof: 0.21, mag: 12, reload: 1.0,
@@ -113,9 +152,9 @@ export function waveTheme(n) {
 
 // Composizione di un'ondata: lista di tipi da generare + moltiplicatori di difficoltà.
 export function waveComposition(n) {
-  const hpMult = 1 + (n - 1) * 0.16 + Math.max(0, n - 10) * 0.08;
-  const speedMult = Math.min(1 + (n - 1) * 0.022, 1.45);
-  const dmgMult = 1 + (n - 1) * 0.07;
+  const hpMult = (1 + (n - 1) * 0.16 + Math.max(0, n - 10) * 0.08) * DIFF.enemyHp;
+  const speedMult = Math.min(1 + (n - 1) * 0.022, 1.45) * DIFF.enemySpeed;
+  const dmgMult = (1 + (n - 1) * 0.07) * DIFF.enemyDmg;
   const theme = waveTheme(n);
 
   const list = [];

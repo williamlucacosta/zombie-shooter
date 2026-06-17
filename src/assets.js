@@ -14,9 +14,11 @@ const MANIFEST = {
     zombie_c: { url: 'assets/models/zombie_c.glb', yaw: 0, height: 2.1 },  // Big Arm (mutante)
     zombie_d: { url: 'assets/models/zombie_d.glb', yaw: 0, height: 0.85 }, // strisciante senza gambe
     dog: { url: 'assets/models/dog.glb', yaw: 0, height: 0.95 },
-    skeleton_a: { url: 'assets/models/skeleton_a.glb', yaw: 0, height: 1.75 },
-    skeleton_b: { url: 'assets/models/skeleton_b.glb', yaw: 0, height: 1.75 },
-    skeleton_c: { url: 'assets/models/skeleton_c.glb', yaw: 0, height: 1.8 },
+    // Gli scheletri (4.8 MB l'uno) compaiono solo dall'ondata 6: caricati in
+    // sottofondo per non rallentare l'avvio.
+    skeleton_a: { url: 'assets/models/skeleton_a.glb', yaw: 0, height: 1.75, deferred: true },
+    skeleton_b: { url: 'assets/models/skeleton_b.glb', yaw: 0, height: 1.75, deferred: true },
+    skeleton_c: { url: 'assets/models/skeleton_c.glb', yaw: 0, height: 1.8, deferred: true },
   },
   guns: {
     pistol: { url: 'assets/models/gun_pistol.glb', length: 0.45 },
@@ -96,6 +98,7 @@ export async function loadAssets(onProgress) {
     if (g) Assets.player = prepModel(g, MANIFEST.player.height, MANIFEST.player.yaw);
   }));
   for (const [name, z] of Object.entries(MANIFEST.characters)) {
+    if (z.deferred) continue; // caricati dopo, in sottofondo
     jobs.push(track(tryGLB(z.url)).then((g) => {
       if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw));
     }));
@@ -130,6 +133,20 @@ export async function loadAssets(onProgress) {
   await Promise.all(jobs);
 
   if (!Assets.groundTexture) Assets.groundTexture = makeProceduralGroundTexture();
+}
+
+/** Carica in sottofondo i modelli pesanti non necessari all'avvio (scheletri). */
+export async function loadDeferredAssets() {
+  const loader = new GLTFLoader();
+  const tryGLB = (url) => new Promise((res) => loader.load(url, (g) => res(g), undefined, () => res(null)));
+  const jobs = [];
+  for (const [name, z] of Object.entries(MANIFEST.characters)) {
+    if (!z.deferred || Assets.characters.has(name)) continue;
+    jobs.push(tryGLB(z.url).then((g) => {
+      if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw));
+    }));
+  }
+  await Promise.all(jobs);
 }
 
 /** Variante personaggio per nome, con catena di ripieghi; null = fallback procedurale. */

@@ -298,6 +298,17 @@ export class Effects {
     }
   }
 
+  rainSplash(x, z) {
+    for (let i = 0; i < 2; i++) {
+      this.alpha.emit({
+        pos: this._tmp.set(x, 0.02, z),
+        vel: new THREE.Vector3((Math.random() - 0.5) * 1.3, 0.9 + Math.random() * 1.3, (Math.random() - 0.5) * 1.3),
+        color: 0x9fb6e0, life: 0.22 + Math.random() * 0.12,
+        size: 0.06, sizeEnd: 0.01, gravity: -12, drag: 1,
+      });
+    }
+  }
+
   heal(pos) {
     for (let i = 0; i < 12; i++) {
       this.additive.emit({

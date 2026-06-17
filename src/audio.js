@@ -2,29 +2,36 @@
 // (manifest sotto) con fallback su un sintetizzatore procedurale, pan posizionale
 // e ambiente sonoro (vento + drone) generato proceduralmente sotto la musica.
 
-// I file vengono cercati in assets/audio/. Le chiavi con array offrono varianti casuali.
+// Tutti i suoni sono OGG mono (~128kbps): leggeri e veloci da caricare.
+// I gunshot sono registrazioni reali premium CC0 (1911, Mossberg, AR-15, S&W 642).
+// Le chiavi con array offrono varianti casuali.
 const AUDIO_MANIFEST = {
   zombie_growl: [
-    'zombie_growl_1.mp3', 'zombie_growl_2.mp3', 'zombie_growl_3.mp3', 'zombie_growl_4.mp3',
-    'zombie_growl_5.mp3', 'zombie_growl_6.mp3', 'zombie_growl_7.wav', 'zombie_growl_8.wav',
-    'zombie_growl_9.wav', 'zombie_growl_10.wav',
+    'zombie_growl_1.ogg', 'zombie_growl_2.ogg', 'zombie_growl_3.ogg', 'zombie_growl_4.ogg',
+    'zombie_growl_5.ogg', 'zombie_growl_6.ogg', 'zombie_growl_7.ogg', 'zombie_growl_8.ogg',
+    'zombie_growl_9.ogg', 'zombie_growl_10.ogg',
   ],
-  zombie_attack: ['zombie_attack_1.wav', 'zombie_attack_2.wav', 'zombie_attack_3.wav', 'zombie_attack_4.wav'],
-  zombie_death: ['zombie_death_1.wav', 'zombie_death_2.wav', 'zombie_death_3.wav'],
-  boss_roar: ['boss_roar.wav'],
-  shot_pistol: ['shot_pistol.wav', 'shot_pistol_2.wav'],
-  shot_shotgun: ['shot_shotgun.wav'],
-  shot_smg: ['shot_smg.wav'],
-  shot_magnum: ['shot_magnum.wav'],
-  reload_pistol: ['reload_pistol.wav'],
-  reload_rifle: ['reload_rifle.wav'],
-  shotgun_pump: ['shotgun_pump.wav'],
-  slam: ['slam.wav'],
-  heartbeat: ['heartbeat.wav'],
-  pickup: ['pickup.wav'],
-  click: ['click.wav'],
+  zombie_attack: ['zombie_attack_1.ogg', 'zombie_attack_2.ogg', 'zombie_attack_3.ogg', 'zombie_attack_4.ogg'],
+  zombie_death: ['zombie_death_1.ogg', 'zombie_death_2.ogg', 'zombie_death_3.ogg'],
+  boss_roar: ['boss_roar.ogg'],
+  shot_pistol: ['shot_pistol.ogg'],
+  shot_shotgun: ['shot_shotgun.ogg'],
+  shot_smg: ['shot_smg.ogg'],
+  shot_magnum: ['shot_magnum.ogg'],
+  reload_pistol: ['reload_pistol.ogg'],
+  reload_rifle: ['reload_rifle.ogg'],
+  shotgun_pump: ['shotgun_pump.ogg'],
+  slam: ['slam.ogg'],
+  heartbeat: ['heartbeat.ogg'],
+  pickup: ['pickup.ogg'],
+  click: ['click.ogg'],
+  thunder: ['thunder_1.ogg', 'thunder_2.ogg'],
+  rain_loop: ['rain_loop.ogg'],
   music_ambient: ['music_ambient.ogg'],
 };
+
+// Con l'audio ormai leggero (~1.2 MB totali) non serve differire nulla.
+const DEFERRED_AUDIO = new Set();
 
 class AudioEngine {
   constructor() {
@@ -58,7 +65,20 @@ class AudioEngine {
     this.musicBus.connect(this.master);
     this.sfxBus = c.createGain();
     this.sfxBus.gain.value = this._vol.sfx;
-    this.sfxBus.connect(this.master);
+    this.sfxBus.connect(this.master); // segnale secco (dry)
+
+    // Riverbero a convoluzione: dà spazio e coda cinematografica a spari e impatti.
+    // Impulso sintetico (rumore con decadimento esponenziale) -> suono "AAA" da arena.
+    this.reverb = c.createConvolver();
+    this.reverb.buffer = this._makeImpulse(2.0, 2.6);
+    this.reverbGain = c.createGain();
+    this.reverbGain.gain.value = 0.16;
+    // pre-filtro per togliere asprezza dalle code
+    this.reverbLP = c.createBiquadFilter();
+    this.reverbLP.type = 'lowpass';
+    this.reverbLP.frequency.value = 5200;
+    this.sfxBus.connect(this.reverbLP);
+    this.reverbLP.connect(this.reverb).connect(this.reverbGain).connect(this.master);
 
     // buffer di rumore bianco riutilizzato da tutto il synth
     const len = c.sampleRate * 1.2;
@@ -67,29 +87,80 @@ class AudioEngine {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   }
 
+  /** Genera un impulso stereo per il convolver (decadimento esponenziale). */
+  _makeImpulse(duration, decay) {
+    const c = this.ctx;
+    const rate = c.sampleRate;
+    const len = Math.floor(rate * duration);
+    const buf = c.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        // piccolo ritardo iniziale + coda che svanisce
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
+      }
+    }
+    return buf;
+  }
+
   resume() { this.ctx?.resume(); }
+
+  /** Avvia la traccia musicale dal buffer, se disponibile e non già in riproduzione. */
+  _tryStartMusicTrack() {
+    if (this._musicPlaying || !this.ctx) return;
+    const music = this.buffers.get('music_ambient');
+    if (!music || !music.length) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = music[0];
+    src.loop = true;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.exponentialRampToValueAtTime(0.55, this.ctx.currentTime + 2.5); // fade-in dolce
+    src.connect(g).connect(this.musicBus);
+    src.start();
+    this._musicSource = src;
+    this._musicPlaying = true;
+  }
 
   setMaster(v) { this._vol.master = v; if (this.master) this.master.gain.value = v; }
   setMusic(v) { this._vol.music = v; if (this.musicBus) this.musicBus.gain.value = v; }
   setSfx(v) { this._vol.sfx = v; if (this.sfxBus) this.sfxBus.gain.value = v; }
 
+  async _loadOne(name, file) {
+    try {
+      const res = await fetch('assets/audio/' + file);
+      if (!res.ok) throw new Error(res.status);
+      const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+      if (!this.buffers.has(name)) this.buffers.set(name, []);
+      this.buffers.get(name).push(buf);
+    } catch { /* manca il file: si userà il synth */ }
+  }
+
+  /** Carica gli SFX essenziali (esclude la musica, che è pesante e differita). */
   async loadFiles(onProgress) {
     const entries = [];
     for (const [name, files] of Object.entries(AUDIO_MANIFEST)) {
+      if (DEFERRED_AUDIO.has(name)) continue;
       for (const f of files) entries.push([name, f]);
     }
     let done = 0;
     await Promise.all(entries.map(async ([name, file]) => {
-      try {
-        const res = await fetch('assets/audio/' + file);
-        if (!res.ok) throw new Error(res.status);
-        const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
-        if (!this.buffers.has(name)) this.buffers.set(name, []);
-        this.buffers.get(name).push(buf);
-      } catch { /* manca il file: si userà il synth */ }
+      await this._loadOne(name, file);
       done++;
       onProgress?.(done / entries.length);
     }));
+  }
+
+  /** Carica in sottofondo le risorse pesanti (musica) senza bloccare il gioco. */
+  async loadDeferred() {
+    const jobs = [];
+    for (const [name, files] of Object.entries(AUDIO_MANIFEST)) {
+      if (!DEFERRED_AUDIO.has(name)) continue;
+      for (const f of files) jobs.push(this._loadOne(name, f));
+    }
+    await Promise.all(jobs);
+    this._tryStartMusicTrack(); // se il gioco è già partito, attacca la musica ora
   }
 
   /** Riproduce un suono per nome: file se disponibile, altrimenti synth. */
@@ -273,23 +344,13 @@ class AudioEngine {
 
   // -------------------------------------------------------------- ambient --
 
-  /** Avvia musica (file se presente) + letto sonoro procedurale di vento e drone. */
+  /** Avvia il letto sonoro procedurale (vento+drone) e la musica se già caricata. */
   startMusic() {
     if (this.started || !this.ctx) return;
     this.started = true;
     const c = this.ctx;
 
-    const music = this.buffers.get('music_ambient');
-    if (music && music.length) {
-      const src = c.createBufferSource();
-      src.buffer = music[0];
-      src.loop = true;
-      const g = c.createGain();
-      g.gain.value = 0.55;
-      src.connect(g).connect(this.musicBus);
-      src.start();
-      this._musicSource = src;
-    }
+    this._tryStartMusicTrack(); // parte ora se il file c'è, altrimenti al termine del download
 
     // vento: rumore filtrato con LFO lentissimo
     const wind = c.createBufferSource();
@@ -316,6 +377,31 @@ class AudioEngine {
       o.start();
     });
     lp.connect(this.droneGain).connect(this.musicBus);
+  }
+
+  /** Avvia/ferma il loop di pioggia con dissolvenza. intensity 0..1. */
+  setRain(on, intensity = 1) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (on) {
+      const target = 0.5 * intensity;
+      if (this._rainSrc) { this._rainGain.gain.setTargetAtTime(target, t, 1.0); return; }
+      const buf = this.buffers.get('rain_loop');
+      if (!buf || !buf.length) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf[0]; src.loop = true;
+      const g = this.ctx.createGain();
+      g.gain.value = 0.0001;
+      g.gain.exponentialRampToValueAtTime(Math.max(target, 0.0001), t + 2.5);
+      src.connect(g).connect(this.master);
+      src.start();
+      this._rainSrc = src; this._rainGain = g;
+    } else if (this._rainSrc) {
+      this._rainGain.gain.setTargetAtTime(0.0001, t, 1.2);
+      const s = this._rainSrc;
+      setTimeout(() => { try { s.stop(); } catch {} }, 4500);
+      this._rainSrc = null; this._rainGain = null;
+    }
   }
 
   /** 0 = calma, 1 = battaglia piena: alza il drone. */

@@ -63,6 +63,7 @@ export class Player {
     // L'arma vive nella scena e ogni frame segue l'osso della mano,
     // ma è orientata verso la mira (la canna punta dove spari).
     this.gunMount = new THREE.Group();
+    this.gunMount.visible = false; // mostrata solo in partita (vedi _updateGun)
     game.scene.add(this.gunMount);
     this._gunPos = new THREE.Vector3();
     this._mountGun('pistol');
@@ -400,6 +401,7 @@ export class Player {
   }
 
   reset() {
+    this.maxHp = CONFIG.player.hp; // applica la vita della difficoltà scelta
     this.hp = this.maxHp;
     this.dead = false;
     this.weapons = { pistol: { mag: WEAPONS.pistol.mag, reserve: Infinity } };

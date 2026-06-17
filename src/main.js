@@ -6,12 +6,13 @@ import {
   EffectComposer, RenderPass, EffectPass,
   BloomEffect, VignetteEffect, SMAAEffect, ChromaticAberrationEffect,
 } from 'postprocessing';
-import { CONFIG, waveTheme, isBossWave } from './config.js';
-import { loadAssets } from './assets.js';
+import { CONFIG, waveTheme, isBossWave, DIFFICULTIES, setDifficulty } from './config.js';
+import { loadAssets, loadDeferredAssets } from './assets.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Effects } from './effects.js';
 import { buildWorld } from './world.js';
+import { Rain } from './rain.js';
 import { Player } from './player.js';
 import { WaveDirector } from './enemies.js';
 import { Pickups } from './pickups.js';
@@ -63,7 +64,7 @@ const input = new Input(renderer.domElement);
 
 const game = {
   scene, camera, renderer, ui, input,
-  effects: null, world: null, player: null, director: null, pickups: null,
+  effects: null, world: null, rain: null, player: null, director: null, pickups: null,
   state: 'menu', // menu | playing | paused | dying | gameover
   wave: 0,
   score: 0,
@@ -72,6 +73,9 @@ const game = {
   intermissionT: 0,
   timeScale: 1,
   elapsed: 0,
+  raining: false,
+  weatherDark: 0,   // target di oscuramento meteo 0..1
+  _dark: 0,         // valore attuale (lerp)
   stats: { shots: 0, hits: 0, kills: 0, time: 0 },
   colliders: [],
 
@@ -125,6 +129,30 @@ const game = {
     const tint = new THREE.Color(theme.tint);
     scene.fog.color.setHex(0x0a0d1a).lerp(tint, 0.06);
     if (scene.background) scene.background.setHex(0x05070f).lerp(tint, 0.03);
+    this._baseFog = scene.fog.color.clone();
+    this._baseBg = scene.background ? scene.background.clone() : null;
+    this.decideWeather(n);
+  },
+
+  // Pioggia occasionale: mai alla prima ondata, ~35% delle altre (sempre durante
+  // alcuni boss per drammaticità). Se piove, intensità variabile e cielo più cupo.
+  decideWeather(n) {
+    let rain = false, intensity = 0;
+    if (n >= 2) {
+      if (this.director.bossDef && Math.random() < 0.6) rain = true;
+      else if (Math.random() < 0.35) rain = true;
+      if (rain) intensity = 0.55 + Math.random() * 0.45;
+    }
+    this.raining = rain;
+    this.weatherDark = rain ? intensity : 0;
+    if (rain) {
+      this.rain.start(intensity);
+      Audio.setRain(true, intensity);
+      ui.toast('⛈ TEMPORALE');
+    } else {
+      this.rain.stop();
+      Audio.setRain(false);
+    }
   },
 
   endGame() {
@@ -149,6 +177,10 @@ const game = {
     this.comboT = 0;
     this.intermissionT = 0;
     this.timeScale = 1;
+    this.raining = false;
+    this.weatherDark = 0;
+    this.rain.stop();
+    Audio.setRain(false);
     this.stats = { shots: 0, hits: 0, kills: 0, time: 0 };
     ui.score(0);
     ui.combo(1);
@@ -174,25 +206,49 @@ const best0 = Number(localStorage.getItem('noh_best') || 0);
 Audio.init(); // contesto sospeso finché l'utente non clicca
 
 (async () => {
-  ui.loading(0, 'Caricamento modelli…');
-  await loadAssets((f) => ui.loading(f * 0.6, 'Caricamento modelli…'));
-  ui.loading(0.6, 'Caricamento audio…');
-  await Audio.loadFiles((f) => ui.loading(0.6 + f * 0.4, 'Caricamento audio…'));
+  // Modelli e SFX essenziali caricati IN PARALLELO; la musica (pesante) è differita.
+  let mp = 0, ap = 0;
+  const upd = () => ui.loading(mp * 0.5 + ap * 0.5, 'Caricamento risorse…');
+  await Promise.all([
+    loadAssets((f) => { mp = f; upd(); }),
+    Audio.loadFiles((f) => { ap = f; upd(); }),
+  ]);
 
   game.effects = new Effects(scene);
   game.world = buildWorld(scene);
   game.colliders = game.world.colliders;
+  game.rain = new Rain(scene);
   game.player = new Player(game);
   game.director = new WaveDirector(game);
   game.pickups = new Pickups(game);
 
   ui.readyToPlay(best0);
+
+  // risorse pesanti non necessarie all'avvio: musica e scheletri (ondata 6+)
+  Audio.loadDeferred();
+  loadDeferredAssets();
 })();
 
 window.__game = game; // diagnostica
 window.__CONFIG = CONFIG; // permette test/tuning della camera a runtime
+window.__audio = Audio; // diagnostica audio nei test
 
 // ------------------------------------------------------------- pulsanti --
+
+// --- selezione difficoltà ---
+const savedDiff = localStorage.getItem('noh_diff') || 'normale';
+function applyDifficulty(key) {
+  const d = setDifficulty(key);
+  localStorage.setItem('noh_diff', d.key);
+  document.getElementById('diff-desc').textContent = d.desc;
+  for (const b of document.querySelectorAll('.diff-btn')) {
+    b.classList.toggle('active', b.dataset.diff === d.key);
+  }
+}
+for (const b of document.querySelectorAll('.diff-btn')) {
+  b.addEventListener('click', () => { applyDifficulty(b.dataset.diff); Audio.play('click', { vol: 0.5 }); });
+}
+applyDifficulty(DIFFICULTIES[savedDiff] ? savedDiff : 'normale');
 
 ui.el.btnPlay.addEventListener('click', () => game.startRun());
 ui.el.btnRestart.addEventListener('click', () => game.startRun());
@@ -227,6 +283,9 @@ const camDesired = new THREE.Vector3();
 const shake = new THREE.Vector3();
 let heartbeatT = 0;
 let intensityT = 0;
+// atmosfera base (vedi world.js) e colore tempesta per il meteo
+const BASE_FOG = 0.018, BASE_EXPO = 1.35;
+const STORM_COLOR = new THREE.Color(0x2a3340);
 
 renderer.setAnimationLoop(() => {
   const rawDt = Math.min(clock.getDelta(), 0.05);
@@ -301,6 +360,22 @@ renderer.setAnimationLoop(() => {
     game.effects?.update(rawDt);
     camera.position.lerp(camDesired.set(Math.sin(t * 0.05) * 4, CONFIG.camera.offsetY, CONFIG.camera.offsetZ + Math.cos(t * 0.07) * 2), 0.02);
     camera.lookAt(0, 0, 0);
+  }
+
+  // pioggia e meteo (in tempo reale, in ogni stato così sfumano correttamente)
+  if (game.rain) {
+    game.rain.update(rawDt, game.player ? game.player.pos : null, game.effects);
+    game._dark += (game.weatherDark - game._dark) * (1 - Math.exp(-2.0 * rawDt));
+    if (game._dark > 0.001) {
+      const d = game._dark;
+      scene.fog.density = BASE_FOG * (1 + 1.8 * d);
+      renderer.toneMappingExposure = BASE_EXPO * (1 - 0.34 * d);
+      if (game._baseFog) scene.fog.color.copy(game._baseFog).lerp(STORM_COLOR, 0.55 * d);
+      if (game._baseBg && scene.background) scene.background.copy(game._baseBg).lerp(STORM_COLOR, 0.4 * d);
+    } else {
+      scene.fog.density = BASE_FOG;
+      renderer.toneMappingExposure = BASE_EXPO;
+    }
   }
 
   composer.render(rawDt);
