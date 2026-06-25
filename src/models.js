@@ -32,12 +32,10 @@ const CANDIDATES = [
   { label: 'Rogue incappucciato (KayKit)', url: 'assets/models/_candidates/player/kaykit_rogue_hooded.glb', role: 'Player · sopravvissuto', source: 'KayKit Adventurers', license: 'CC0' },
   // --- Zombi ---
   { label: 'Zombie Hazmat ★ (PBR realistico, +corsa retargetata)', url: 'assets/models/zombie_hazmat.glb', role: 'Walker / Runner', source: 'Sketchfab · LxNazarov', license: 'CC-BY 4.0' },
-  { label: 'Mutant ★ brute/boss (13 anim, crepe luminescenti)', url: 'assets/models/mutant/a.gltf', role: 'Brute / Boss', source: 'Mixamo (repo MIT) + texture creatura', license: 'Mixamo' },
+  { label: 'Mutant ★ brute/boss (13 anim, crepe luminescenti)', url: 'assets/models/mutant/a.glb', role: 'Brute / Boss', source: 'Mixamo (repo MIT) + texture creatura', license: 'Mixamo' },
   { label: 'SF · Zombie Aiden (idle/walk/attack)', url: 'assets/models/sf/zombie_aiden.glb', role: 'Walker', source: 'Sketchfab · Aiden Studios', license: 'CC-BY' },
   { label: 'SF · Zombie Larnox ★ (9 anim: walk/run/attack/death/scream)', url: 'assets/models/sf/zombie_larnox.glb', role: 'Walker / Runner', source: 'Sketchfab · Larnox', license: 'CC-BY-NC' },
   { label: 'SF · Wolf (creep/run/walk) ★ crawler', url: 'assets/models/sf/wolf_3dhaupt.glb', role: 'Crawler / Hound', source: 'Sketchfab · 3DHaupt', license: 'CC-BY-NC' },
-  { label: 'SF · Shotgun Classic', url: 'assets/models/sf/shotgun_classic.glb', role: 'Arma', source: 'Sketchfab · Evan16', license: 'CC-BY' },
-  { label: 'SF · FPS Hands Cransh (8 anim)', url: 'assets/models/sf/fps_hands_cransh.glb', role: 'Mani FPS', source: 'Sketchfab · Cransh', license: 'CC-BY' },
   // --- Scheletri ---
   { label: 'Skeleton ★ (con Spawn)', url: 'assets/models/_candidates/skeletons_hound/skel_quaternius_spawn.glb', role: 'Spitter / Walker tardo', source: 'Quaternius', license: 'CC0' },
   { label: 'Skeleton spadaccino', url: 'assets/models/_candidates/skeletons_hound/skel_quaternius_sword.glb', role: 'Skeleton', source: 'Quaternius', license: 'CC0' },
