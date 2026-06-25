@@ -33,6 +33,7 @@ const LABELS = {
   boss_roar: 'Ruggito del boss',
   slam: 'Schianto a terra (boss)',
   hit_flesh: 'Colpo a segno (carne)',
+  zombie_hit: 'Impatto proiettile (random: splat + colpo)',
   crit: 'Colpo critico',
   splat: 'Splatter / gib',
   spit: 'Sputo (spitter)',
@@ -44,9 +45,14 @@ const LABELS = {
   rain_loop: 'Pioggia (loop)',
   click: 'Click / cambio arma',
   heartbeat: 'Battito (vita bassa)',
-  wave_start: 'Inizio ondata',
-  wave_clear: 'Ondata completata',
+  wave_start: 'Inizio ondata (attuale: braam apocalittico)',
+  wave_clear: 'Ondata completata (attuale: alba/risoluzione)',
   music_ambient: 'Musica ambient (loop)',
+  cand_start_evilopen: 'Inizio — Evil Open (alt.)',
+  cand_start_evilhit: 'Inizio — Evil Hit (alt.)',
+  cand_start_braamhit: 'Inizio — Braam Hit (alt.)',
+  cand_clear_hope: 'Fine — Hope / risoluzione (alt.)',
+  cand_clear_bell: 'Fine — Campana (alt.)',
 };
 
 const LOOPING = new Set(['rain_loop', 'music_ambient']);
@@ -57,10 +63,12 @@ const FILE_GROUPS = [
   { title: 'Armi — ricariche', hint: 'Registrazioni reali CC0, corte.', keys: ['reload_pistol', 'reload_rifle', 'shotgun_pump'] },
   { title: 'Movimento', hint: 'Rimosso footstep_2; footstep_3 ammorbidito.', keys: ['step'] },
   { title: 'Zombi & boss', keys: ['zombie_growl', 'zombie_attack', 'zombie_death', 'boss_roar', 'slam'] },
-  { title: 'Combattimento', hint: 'Impatti/foley reali CC0 (prima sintetizzati).', keys: ['hit_flesh', 'crit', 'splat', 'spit', 'dash'] },
+  { title: 'Combattimento', hint: 'Impatti/foley reali CC0 (prima sintetizzati).', keys: ['zombie_hit', 'hit_flesh', 'crit', 'splat', 'spit', 'dash'] },
   { title: 'Giocatore', keys: ['hurt', 'weapon_pickup', 'pickup'] },
   { title: 'Meteo', keys: ['thunder', 'rain_loop'] },
   { title: 'UI & ondate', keys: ['click', 'heartbeat', 'wave_start', 'wave_clear'] },
+  { title: 'Candidati ondate — provali e scegli', hint: 'Alternative per inizio/fine ondata. Dimmi quale preferisci e la imposto.',
+    keys: ['cand_start_evilopen', 'cand_start_evilhit', 'cand_start_braamhit', 'cand_clear_hope', 'cand_clear_bell'] },
   { title: 'Musica', keys: ['music_ambient'] },
 ];
 

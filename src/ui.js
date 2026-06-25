@@ -7,19 +7,20 @@ const $ = (id) => document.getElementById(id);
 export class UI {
   constructor() {
     this.el = {
-      hud: $('hud'), menu: $('menu'), gameover: $('gameover'), pause: $('pause'),
+      hud: $('hud'), menu: $('menu'), gameover: $('gameover'), pause: $('pause'), options: $('options'),
+      btnOptions: $('btn-options'),
       hpFill: $('hp-fill'), hpGhost: $('hp-ghost'), hpText: $('hp-text'),
       stamina: $('stamina'),
       ammo: $('ammo'), weaponName: $('weapon-name'), reloadHint: $('reload-hint'),
       waveNum: $('wave-num'), waveName: $('wave-name'), enemiesLeft: $('enemies-left'),
-      score: $('score'), combo: $('combo'),
+      score: $('score'), combo: $('combo'), souls: $('souls'), doorPrompt: $('door-prompt'),
       bossWrap: $('boss-wrap'), bossName: $('boss-name'), bossFill: $('boss-fill'),
       banner: $('banner'), bannerTitle: $('banner-title'), bannerSub: $('banner-sub'),
       countdown: $('countdown'),
       toast: $('pickup-toast'),
       crosshair: $('crosshair'),
       damageFlash: $('damage-flash'), lowhp: $('lowhp'),
-      loadingWrap: $('loading-wrap'), loadingFill: $('loading-fill'), loadingLabel: $('loading-label'),
+      loadingWrap: $('loading-wrap'), loadingFill: $('loading-fill'), loadingLabel: $('loading-label'), tutorial: $('tutorial'),
       btnPlay: $('btn-play'), btnRestart: $('btn-restart'), btnResume: $('btn-resume'), btnQuit: $('btn-quit'),
       menuRecord: $('menu-record'),
     };
@@ -36,12 +37,14 @@ export class UI {
   readyToPlay(best) {
     this.el.loadingWrap.style.display = 'none';
     this.el.loadingLabel.style.display = 'none';
+    this.el.tutorial.style.display = 'none'; // il tutorial esiste solo durante il caricamento
     this.el.btnPlay.style.display = '';
+    this.el.btnOptions.style.display = ''; // la rondella compare solo a risorse caricate
     this.el.menuRecord.textContent = best > 0 ? `RECORD: ${best.toLocaleString('it-IT')}` : '';
   }
 
   showScreen(name) {
-    for (const s of ['menu', 'gameover', 'pause']) {
+    for (const s of ['menu', 'gameover', 'pause', 'options']) {
       this.el[s].classList.toggle('hidden', s !== name);
     }
     this.el.hud.classList.toggle('visible', name === null);
@@ -110,6 +113,25 @@ export class UI {
     } else {
       this.el.combo.textContent = '';
     }
+  }
+
+  souls(n) {
+    this.el.souls.textContent = `✦ ${Math.round(n).toLocaleString('it-IT')}`;
+    this.el.souls.style.transform = 'scale(1.18)';
+    clearTimeout(this._soulsT);
+    this._soulsT = setTimeout(() => { this.el.souls.style.transform = 'scale(1)'; }, 90);
+  }
+
+  /** Prompt vicino a una porta: gate = oggetto porta (o null per nasconderlo), souls = Anime attuali. */
+  doorPrompt(gate, souls = 0) {
+    const el = this.el.doorPrompt;
+    if (!gate) { el.classList.remove('show'); return; }
+    const poor = souls < gate.cost;
+    el.classList.toggle('poor', poor);
+    el.innerHTML = poor
+      ? `<b>${gate.name}</b> · serve <span class="cost">${gate.cost} ✦</span>`
+      : `<span class="key">E</span> apri <b>${gate.name}</b> · <span class="cost">${gate.cost} ✦</span>`;
+    el.classList.add('show');
   }
 
   banner(title, sub, ms = 2600) {

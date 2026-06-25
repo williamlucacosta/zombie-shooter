@@ -33,12 +33,22 @@ export const AUDIO_MANIFEST = {
   // suoni reali CC0 che sostituiscono i precedenti sintetizzati (Audio.play preferisce il file)
   dash: ['dash.ogg'],
   hit_flesh: ['hit_flesh.ogg'],
+  // impatto del proiettile sullo zombie: alterna a caso splatter/gib e un colpo carnoso (CC0).
+  // pitch leggermente variato + volume medio-basso sono impostati al call site in enemies.js.
+  zombie_hit: ['splat.ogg', 'zombie_hit_1.ogg'],
   crit: ['crit.ogg'],
   splat: ['splat.ogg'],
   spit: ['spit.ogg'],
   hurt: ['hurt_1.ogg', 'hurt_2.ogg', 'hurt_3.ogg'],
   wave_start: ['wave_start.ogg'],
   wave_clear: ['wave_clear.ogg'],
+  // --- candidati alternativi per i suoni d'ondata: SOLO per ascoltarli su /audios e scegliere.
+  //     Dopo la scelta, promuovi il preferito a wave_start/wave_clear e rimuovi questi 5. ---
+  cand_start_evilopen: ['cand_start_evilopen.ogg'],
+  cand_start_evilhit: ['cand_start_evilhit.ogg'],
+  cand_start_braamhit: ['cand_start_braamhit.ogg'],
+  cand_clear_hope: ['cand_clear_hope.ogg'],
+  cand_clear_bell: ['cand_clear_bell.ogg'],
 };
 
 // Con l'audio ormai leggero (~1.2 MB totali) non serve differire nulla.
@@ -51,7 +61,7 @@ class AudioEngine {
     this.started = false;
     this.intensity = 0;
     this._musicSource = null;
-    this._vol = { master: 0.8, music: 0.5, sfx: 0.9 };
+    this._vol = { master: 0.8, music: 0, sfx: 0.9 }; // musica MUTA di default (l'utente la alza dalle opzioni)
     this._musicLevel = 0.42; // livello della traccia musicale dentro il bus musica
   }
 
@@ -291,6 +301,13 @@ class AudioEngine {
       case 'hit_flesh':
         this._noise(t, 0.07, { hp: 80, lp: 1400, lpEnd: 300, peak: 0.5 * v, pan });
         this._tone(t, 0.08, { type: 'triangle', f0: 280 * rate, f1: 90, peak: 0.3 * v, pan });
+        break;
+      case 'zombie_hit':
+        // impatto carnoso/umido sul non morto: tonfo grave + corpo + schizzo bagnato + pacca
+        this._tone(t, 0.11, { type: 'sine', f0: 170 * rate, f1: 50, peak: 0.5 * v, pan });
+        this._noise(t, 0.07, { hp: 90, lp: 2200, lpEnd: 240, peak: 0.5 * v, pan });
+        this._noise(t + 0.012, 0.07, { hp: 600, lp: 3200, lpEnd: 700, peak: 0.26 * v, attack: 0.001, pan });
+        this._tone(t + 0.01, 0.06, { type: 'triangle', f0: 320 * rate, f1: 115, peak: 0.13 * v, pan });
         break;
       case 'crit':
         this._noise(t, 0.08, { hp: 100, lp: 2200, lpEnd: 300, peak: 0.55 * v, pan });

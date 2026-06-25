@@ -67,8 +67,18 @@
       background: linear-gradient(180deg, #3a0d0d, #1d0606); box-shadow: 0 0 16px rgba(196,30,30,.4); }
     #diff-desc { font-size: 12px; color: #8b94a8; font-style: italic; height: 16px; letter-spacing: .08em; }
 
-    .controls-hint { display: grid; grid-template-columns: auto auto; gap: 6px 18px; font-size: 14px; color: #8b94a8; margin-top: 6px; }
-    .controls-hint b { color: var(--bone); font-weight: 600; text-align: right; }
+    /* tutorial: mostrato SOLO durante il caricamento, stile "keycap" */
+    #tutorial { display: flex; flex-direction: column; align-items: center; gap: 16px; margin: 8px 0 4px;
+      animation: tutIn .6s ease both; }
+    @keyframes tutIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .tut-title { font-family: 'Horror', 'Chiller', cursive; font-size: 26px; letter-spacing: .16em; color: var(--amber);
+      text-shadow: 0 0 20px rgba(255,150,60,.5), 0 0 44px rgba(196,30,30,.3); }
+    .tut-grid { display: grid; grid-template-columns: repeat(4, auto); gap: 13px 26px; }
+    .tut-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #c0c7d6; letter-spacing: .03em; }
+    .keycap { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 31px; padding: 0 11px;
+      font-weight: 700; font-size: 13px; letter-spacing: .06em; color: #f2e8d5; white-space: nowrap;
+      background: linear-gradient(180deg, #2d2331, #14101c); border: 1px solid #5c4860; border-top-color: #7c6580;
+      border-radius: 7px; box-shadow: 0 3px 0 #0b0810, 0 5px 9px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.09); }
     .record { font-size: 14px; color: var(--amber); letter-spacing: .2em; }
     .loading-bar { width: 340px; height: 6px; background: #1a1320; border-radius: 3px; overflow: hidden; border: 1px solid #33203a; }
     .loading-bar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #7e2222, #e04a30); transition: width .25s ease; }
@@ -84,6 +94,41 @@
     #pause .vol-row { display: flex; align-items: center; gap: 14px; font-size: 13px; color: #9aa3b8; width: 300px; }
     #pause .vol-row span { width: 90px; text-align: right; letter-spacing: .1em; }
     input[type=range] { flex: 1; accent-color: #c41e1e; }
+
+    /* ---------- opzioni (toggle) ---------- */
+    .opt-row { display: flex; align-items: center; gap: 14px; font-size: 13px; color: #9aa3b8; letter-spacing: .1em; }
+    .toggle { position: relative; width: 46px; height: 24px; flex: none; }
+    .toggle input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+    .toggle .track { display: block; width: 46px; height: 24px; border-radius: 12px;
+      background: #241c28; border: 1px solid #463848; transition: background .2s, border-color .2s; }
+    .toggle .track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+      border-radius: 50%; background: #8b94a8; transition: transform .2s, background .2s; }
+    .toggle input:checked + .track { background: linear-gradient(180deg, #7e2222, #3a0d0d); border-color: var(--blood); }
+    .toggle input:checked + .track::after { transform: translateX(22px); background: #ff6a4a; }
+    #pause .opt-row { width: 300px; justify-content: space-between; }
+    #pause .opt-row span { letter-spacing: .14em; }
+    /* pulsante rondella (apre la scheda opzioni) */
+    .gear-btn {
+      position: absolute; top: 22px; right: 26px; width: 48px; height: 48px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 25px; line-height: 1;
+      color: #c7cedd; background: rgba(20,12,16,.72); border: 1px solid #3a2630; cursor: pointer; z-index: 60;
+      box-shadow: inset 0 0 14px rgba(0,0,0,.5); transition: transform .25s ease, color .15s, border-color .15s, box-shadow .2s;
+    }
+    .gear-btn:hover { color: var(--bone); border-color: var(--blood); transform: rotate(55deg) scale(1.08);
+      box-shadow: 0 0 20px rgba(196,30,30,.45), inset 0 0 14px rgba(0,0,0,.5); }
+
+    /* scheda OPZIONI (modale): audio + toggle di gioco */
+    .opt-panel {
+      display: flex; flex-direction: column; gap: 11px; width: 340px;
+      background: rgba(12,8,14,.6); border: 1px solid #2a1c24; border-radius: 9px; padding: 20px 24px;
+      box-shadow: inset 0 0 26px rgba(0,0,0,.5);
+    }
+    .opt-section { font-size: 12px; letter-spacing: .3em; color: var(--amber); margin-top: 8px; border-bottom: 1px solid #2a1c24; padding-bottom: 5px; }
+    .opt-section:first-child { margin-top: 0; }
+    .opt-panel .vol-row { display: flex; align-items: center; gap: 14px; font-size: 13px; color: #9aa3b8; }
+    .opt-panel .vol-row span { width: 92px; text-align: right; letter-spacing: .1em; }
+    .opt-panel .opt-row { width: 100%; justify-content: space-between; }
+    .opt-panel .opt-row span { letter-spacing: .14em; }
 
     /* ---------- HUD ---------- */
     #hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; opacity: 0; transition: opacity .4s; }
@@ -119,6 +164,20 @@
     #score-wrap { position: absolute; right: 26px; top: 22px; text-align: right; }
     #score { font-size: 30px; font-variant-numeric: tabular-nums; }
     #combo { font-size: 16px; color: var(--amber); height: 20px; font-weight: 700; transition: transform .1s; }
+    #souls { font-size: 18px; color: #c4a6ff; text-shadow: 0 0 12px rgba(150,110,255,.55); font-weight: 700;
+             letter-spacing: .04em; margin-top: 2px; font-variant-numeric: tabular-nums; transition: transform .1s; }
+
+    /* prompt apertura porte */
+    #door-prompt { position: absolute; bottom: 168px; left: 50%; transform: translateX(-50%); text-align: center;
+      font-size: 16px; letter-spacing: .1em; color: var(--bone); padding: 9px 20px; border-radius: 7px;
+      background: rgba(8,6,12,.78); border: 1px solid #5a4632; box-shadow: 0 0 24px rgba(0,0,0,.5);
+      opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
+    #door-prompt.show { opacity: 1; }
+    #door-prompt b { color: var(--amber); }
+    #door-prompt .cost { color: #ffcf6a; font-weight: 700; }
+    #door-prompt.poor .cost { color: var(--blood); }
+    #door-prompt .key { display: inline-block; min-width: 20px; border: 1px solid #b9b0a0; border-radius: 4px;
+      padding: 1px 7px; margin: 0 3px; font-weight: 700; color: var(--bone); background: rgba(255,255,255,.06); }
 
     #boss-wrap { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); width: min(560px, 60vw); display: none; }
     #boss-name { text-align: center; font-size: 22px; color: #ff9e7a; text-shadow: 0 0 12px rgba(255,80,40,.6); margin-bottom: 5px; }
@@ -176,7 +235,9 @@
     <div id="score-wrap">
       <div id="score">0</div>
       <div id="combo"></div>
+      <div id="souls">✦ 0</div>
     </div>
+    <div id="door-prompt"></div>
     <div id="boss-wrap">
       <div id="boss-name" class="horror">BOSS</div>
       <div id="boss-bar"><div id="boss-fill"></div></div>
@@ -207,6 +268,7 @@
 
   <!-- MENU -->
   <div id="menu" class="screen">
+    <button id="btn-options" class="gear-btn" title="Opzioni" style="display:none">⚙</button>
     <div class="title horror">NOTTE DELL'ORDA</div>
     <div class="subtitle">Sopravvivi alle ondate dei non morti</div>
     <div id="difficulty" style="display:none">
@@ -219,17 +281,22 @@
       </div>
       <div id="diff-desc">L'esperienza bilanciata</div>
     </div>
+    <div id="tutorial">
+      <div class="tut-title">COME SOPRAVVIVERE ALL'ORDA</div>
+      <div class="tut-grid">
+        <div class="tut-item"><span class="keycap">W A S D</span> Muoviti</div>
+        <div class="tut-item"><span class="keycap">🖱</span> Mira &amp; spara</div>
+        <div class="tut-item"><span class="keycap">Shift</span> Scatto</div>
+        <div class="tut-item"><span class="keycap">R</span> Ricarica</div>
+        <div class="tut-item"><span class="keycap">1 – 4</span> Cambia arma</div>
+        <div class="tut-item"><span class="keycap">V</span> Cambia visuale</div>
+        <div class="tut-item"><span class="keycap">E</span> Apri porte ✦</div>
+        <div class="tut-item"><span class="keycap">Esc</span> Pausa</div>
+      </div>
+    </div>
     <div class="loading-bar" id="loading-wrap"><div id="loading-fill"></div></div>
     <div id="loading-label">Caricamento risorse…</div>
     <button id="btn-play" class="btn" style="display:none">GIOCA</button>
-    <div class="controls-hint">
-      <b>WASD</b><span>Movimento</span>
-      <b>Mouse</b><span>Mira e fuoco</span>
-      <b>Shift / Spazio</b><span>Scatto</span>
-      <b>R</b><span>Ricarica</span>
-      <b>1–4 / Rotella</b><span>Cambio arma</span>
-      <b>Esc</b><span>Pausa</span>
-    </div>
     <div class="record" id="menu-record"></div>
   </div>
 
@@ -251,12 +318,25 @@
 
   <!-- PAUSE -->
   <div id="pause" class="screen hidden">
+    <button id="btn-options-pause" class="gear-btn" title="Opzioni">⚙</button>
     <div class="title horror" style="font-size:64px">PAUSA</div>
-    <div class="vol-row"><span>GENERALE</span><input type="range" id="vol-master" min="0" max="100" value="80"></div>
-    <div class="vol-row"><span>MUSICA</span><input type="range" id="vol-music" min="0" max="100" value="50"></div>
-    <div class="vol-row"><span>EFFETTI</span><input type="range" id="vol-sfx" min="0" max="100" value="90"></div>
     <button id="btn-resume" class="btn">RIPRENDI</button>
     <button id="btn-quit" class="btn" style="font-size:22px;padding:8px 40px">ABBANDONA</button>
+  </div>
+
+  <!-- OPZIONI (scheda apribile dalla rondella, da menu e da pausa) -->
+  <div id="options" class="screen hidden">
+    <div class="title horror" style="font-size:56px">OPZIONI</div>
+    <div class="opt-panel">
+      <div class="opt-section">AUDIO</div>
+      <div class="vol-row"><span>GENERALE</span><input type="range" id="vol-master" min="0" max="100" value="80"></div>
+      <div class="vol-row"><span>MUSICA</span><input type="range" id="vol-music" min="0" max="100" value="0"></div>
+      <div class="vol-row"><span>EFFETTI</span><input type="range" id="vol-sfx" min="0" max="100" value="90"></div>
+      <div class="opt-section">GIOCO</div>
+      <div class="opt-row"><span>SANGUE</span><label class="toggle"><input type="checkbox" data-opt="blood"><span class="track"></span></label></div>
+      <div class="opt-row"><span>DANNI VISIBILI</span><label class="toggle"><input type="checkbox" data-opt="damage"><span class="track"></span></label></div>
+    </div>
+    <button id="btn-options-close" class="btn">INDIETRO</button>
   </div>
 
   <script type="module" src="/src/main.js"></script>

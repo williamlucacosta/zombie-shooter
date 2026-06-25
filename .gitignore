@@ -6,11 +6,19 @@ dist/
 
 # log e cache
 *.log
+*.stackdump
 .vite/
 .DS_Store
 
 # screenshot generati dai test headless
 tools/*.png
+tools/_shots/
 
 # staging audio (sorgenti grezze, non committare)
 tools/_audiosrc/
+
+# modelli candidati in valutazione (staging, non committare)
+public/assets/models/_candidates/
+
+# backup degli asset originali pre-compressione (tools/compress-assets.mjs)
+public/assets/_orig/

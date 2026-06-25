@@ -3,17 +3,41 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+// Loader glTF con decoder meshopt registrato (lo zombie Hazmat usa EXT_meshopt_compression).
+function makeLoader() {
+  const l = new GLTFLoader();
+  l.setMeshoptDecoder(MeshoptDecoder);
+  return l;
+}
 
 // Nomi canonici dei file: lo script tools/download-assets.ps1 salva con questi nomi.
 // Personaggi: Quaternius Post-Apocalypse + KayKit Skeletons (CC0).
 const MANIFEST = {
-  player: { url: 'assets/models/player.glb', yaw: 0, height: 1.8 },
+  // Soldato realistico (rig Mixamo "Vanguard", via three.js examples). Clip: Idle/Walk/Run.
+  // yaw=π: il rig Mixamo guarda nel verso opposto a Quaternius, va girato per puntare la mira.
+  player: { url: 'assets/models/player_soldier.glb', yaw: Math.PI, height: 1.85 },
   characters: {
-    zombie_a: { url: 'assets/models/zombie_a.glb', yaw: 0, height: 1.85 },
-    zombie_b: { url: 'assets/models/zombie_b.glb', yaw: 0, height: 1.8 },
-    zombie_c: { url: 'assets/models/zombie_c.glb', yaw: 0, height: 2.1 },  // Big Arm (mutante)
-    zombie_d: { url: 'assets/models/zombie_d.glb', yaw: 0, height: 0.85 }, // strisciante senza gambe
-    dog: { url: 'assets/models/dog.glb', yaw: 0, height: 0.95 },
+    // SOLO il walker dell'ondata 1 (zombie_aiden) è eager: è l'unico nemico che può comparire nei
+    // primi secondi. Tutti gli altri sono `deferred` (caricati in sottofondo dopo il menu): il primo
+    // nemico spunta ≥2.4s dopo "GIOCA", quindi arrivano in tempo e non rallentano l'avvio.
+    zombie_aiden: { url: 'assets/models/sf/zombie_aiden.glb', yaw: 0, height: 1.85, stripPos: true }, // emaciato/insanguinato (CC-BY)
+    // Zombie Hazmat PBR realistico (rig Mixamo, EXT_meshopt). Solo lateModel (ondata 6+).
+    zombie_hazmat: { url: 'assets/models/zombie_hazmat.glb', yaw: 0, height: 1.9, deferred: true },
+    // Zombie realistici da Sketchfab (Download API). Hanno ROOT MOTION nelle clip di locomozione:
+    // stripPos rimuove le tracce di posizione (l'IA controlla la posizione, sennò scivolano).
+    zombie_larnox: { url: 'assets/models/sf/zombie_larnox.glb', yaw: 0, height: 1.8, stripPos: true, deferred: true }, // runner ondata 2+ (CC-BY-NC)
+    zombie_a: { url: 'assets/models/zombie_a.glb', yaw: 0, height: 1.85, deferred: true },
+    zombie_b: { url: 'assets/models/zombie_b.glb', yaw: 0, height: 1.8, deferred: true },
+    zombie_c: { url: 'assets/models/zombie_c.glb', yaw: 0, height: 2.1, deferred: true },  // Big Arm (ripiego brute)
+    // Mutant realistico (rig Mixamo, 13 animazioni di combattimento: idle/running/punch/fist/
+    // hit/jumpAttack/knockDown). Texture creatura roccia+carne con crepe luminescenti (a.jpg).
+    mutant: { url: 'assets/models/mutant/a.glb', yaw: 0, height: 2.0, deferred: true }, // brute ondata 4+
+    zombie_d: { url: 'assets/models/zombie_d.glb', yaw: 0, height: 0.85, deferred: true }, // strisciante senza gambe (ripiego)
+    dog: { url: 'assets/models/dog.glb', yaw: 0, height: 0.95, deferred: true },
+    // Wolf realistico per il "crawler" (cane che carica): creep/run/walk. Root motion -> stripPos.
+    wolf: { url: 'assets/models/sf/wolf_3dhaupt.glb', yaw: 0, height: 1.0, stripPos: true, deferred: true },
     // Gli scheletri (4.8 MB l'uno) compaiono solo dall'ondata 6: caricati in
     // sottofondo per non rallentare l'avvio.
     skeleton_a: { url: 'assets/models/skeleton_a.glb', yaw: 0, height: 1.75, deferred: true },
@@ -21,7 +45,8 @@ const MANIFEST = {
     skeleton_c: { url: 'assets/models/skeleton_c.glb', yaw: 0, height: 1.8, deferred: true },
   },
   guns: {
-    pistol: { url: 'assets/models/gun_pistol.glb', length: 0.45 },
+    // Glock-17 realistico skinnato con clip Shoot/Reload/Draw (mani del rig FPS rimosse al mount).
+    pistol: { url: 'assets/models/gun_pistol_glock.glb', length: 0.42 },
     shotgun: { url: 'assets/models/gun_shotgun.glb', length: 0.85 },
     smg: { url: 'assets/models/gun_rifle.glb', length: 0.85 },
     magnum: { url: 'assets/models/gun_rifle.glb', length: 0.85 },
@@ -36,7 +61,8 @@ const MANIFEST = {
     fence: { url: 'assets/models/fence.gltf', height: 1.1 },
     fence_broken: { url: 'assets/models/fence_broken.gltf', height: 1.1 },
     post_lantern: { url: 'assets/models/post_lantern.gltf', height: 3.0 },
-    lantern_standing: { url: 'assets/models/lantern_standing.gltf', height: 0.7 },
+    // lanterna in legno realistica (PolyHaven CC0) al posto della low-poly
+    lantern_standing: { url: 'assets/models/ph/wooden_lantern_01/wooden_lantern_01_1k.glb', height: 0.62 },
     coffin: { url: 'assets/models/coffin.gltf', height: 0.7 },
     skull: { url: 'assets/models/skull.gltf', height: 0.3 },
     ribcage: { url: 'assets/models/ribcage.gltf', height: 0.5 },
@@ -45,8 +71,17 @@ const MANIFEST = {
     bone_A: { url: 'assets/models/bone_A.gltf', height: 0.25 },
     barrel: { url: 'assets/models/barrel.glb', height: 1.0 },
     crate: { url: 'assets/models/crate.glb', height: 0.8 },
+    // --- props realistici PBR (PolyHaven CC0, texture 1k). I "trunk" sono tronchi DISTESI:
+    //     mappati come tronchi caduti (height = diametro target, la lunghezza segue la scala). ---
+    log_fallen: { url: 'assets/models/ph/dead_tree_trunk/dead_tree_trunk_1k.glb', height: 0.42 },
+    log_fallen_big: { url: 'assets/models/ph/dead_tree_trunk_02/dead_tree_trunk_02_1k.glb', height: 0.95 },
+    tree_stump: { url: 'assets/models/ph/tree_stump_01/tree_stump_01_1k.glb', height: 0.7 },
+    boulder: { url: 'assets/models/ph/boulder_01/boulder_01_1k.glb', height: 1.25 },
+    rocks_moss: { url: 'assets/models/ph/rock_moss_set_01/rock_moss_set_01_1k.glb', height: 1.0 },
+    rock_small: { url: 'assets/models/ph/rock_07/rock_07_1k.glb', height: 0.42 },
+    statue_bust: { url: 'assets/models/ph/marble_bust_01/marble_bust_01_1k.glb', height: 0.78 },
   },
-  groundTexture: 'assets/textures/ground.jpg',
+  groundTexture: 'assets/textures/ground.webp',
 };
 
 export const Assets = {
@@ -55,9 +90,46 @@ export const Assets = {
   guns: new Map(),       // nome -> { scene, length }
   props: new Map(),      // nome -> { scene, scale, footOffset }
   groundTexture: null,
+  tex: {},               // set PBR realistici (PolyHaven CC0): { nome: { map, normalMap, roughnessMap } }
 };
 
-function prepModel(gltf, targetHeight, yaw) {
+// Set di texture PBR realistiche (PolyHaven, CC0): diffuse + normale + rugosità.
+const PBR_SETS = {
+  forest: 'ph_forrest_ground_01',
+  cobble: 'ph_cobblestone_floor_08',
+  rock: 'ph_rock_wall_10',
+  planks: 'ph_weathered_planks',
+};
+
+// Ogni set è scaricato e decodificato UNA SOLA volta (cache per `base`); gli usi con repeat diverso
+// (es. forest serve sia a `forest` repeat 9 sia a `hubGround` repeat 30) riusano la stessa immagine
+// via clone — niente doppio download né doppio decode (il decode è il collo di bottiglia in locale).
+const _pbrCache = new Map(); // base -> { map, normalMap, roughnessMap } canonici (immagine condivisa)
+
+function loadPBRSet(texLoader, base, repeat) {
+  let canon = _pbrCache.get(base);
+  if (!canon) {
+    const load = (suffix, srgb) => {
+      const t = texLoader.load(`assets/textures/${base}_${suffix}.webp`, undefined, undefined, () => {});
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    canon = { map: load('diff', true), normalMap: load('nor_gl', false), roughnessMap: load('rough', false) };
+    _pbrCache.set(base, canon);
+  }
+  const variant = (t) => {
+    const c = t.clone(); // condivide la Source (immagine): nessun nuovo fetch/decode
+    c.wrapS = c.wrapT = THREE.RepeatWrapping;
+    c.repeat.set(repeat, repeat);
+    c.anisotropy = 8;
+    c.colorSpace = t.colorSpace;
+    c.needsUpdate = true;
+    return c;
+  };
+  return { map: variant(canon.map), normalMap: variant(canon.normalMap), roughnessMap: variant(canon.roughnessMap) };
+}
+
+function prepModel(gltf, targetHeight, yaw, opts = {}) {
   const scene = gltf.scene;
   scene.traverse((o) => {
     if (o.isMesh) {
@@ -69,6 +141,16 @@ function prepModel(gltf, targetHeight, yaw) {
       }
     }
   });
+  // root motion: alcune clip includono la traslazione del bacino -> il mesh slitterebbe rispetto
+  // alla posizione IA. `stripPos` toglie TUTTE le tracce di posizione (modelli con root motion non
+  // marcato, es. Sketchfab); altrimenti togliamo solo bacino/root delle clip "...Root" (Mixamo).
+  for (const clip of gltf.animations || []) {
+    if (opts.stripPos) {
+      clip.tracks = clip.tracks.filter((t) => !/\.position$/.test(t.name));
+    } else if (/root/i.test(clip.name)) {
+      clip.tracks = clip.tracks.filter((t) => !(/\.position$/.test(t.name) && /(hips|root)/i.test(t.name)));
+    }
+  }
   const box = new THREE.Box3().setFromObject(scene);
   const h = Math.max(box.max.y - box.min.y, 0.01);
   const scale = targetHeight / h;
@@ -82,37 +164,45 @@ function prepModel(gltf, targetHeight, yaw) {
 }
 
 export async function loadAssets(onProgress) {
-  const loader = new GLTFLoader();
+  const loader = makeLoader();
   const texLoader = new THREE.TextureLoader();
   const tryGLB = (url) => new Promise((res) => loader.load(url, (g) => res(g), undefined, () => res(null)));
   const tryTex = (url) => new Promise((res) => texLoader.load(url, (t) => res(t), undefined, () => res(null)));
 
+  // Caricamento in parallelo, ma l'etichetta mostra la categoria a priorità più alta ancora in
+  // corso (Personaggi -> Armi -> Ambiente): progressione leggibile senza saltellare a caso.
   const jobs = [];
   let done = 0, total = 0;
-  const track = (p) => {
-    total++;
-    return p.then((r) => { done++; onProgress?.(done / total); return r; });
+  const pending = { Personaggi: 0, Armi: 0, Ambiente: 0 };
+  const ORDER = ['Personaggi', 'Armi', 'Ambiente'];
+  const track = (p, phase) => {
+    total++; pending[phase]++;
+    return p.then((r) => {
+      done++; pending[phase]--;
+      onProgress?.(done / total, (ORDER.find((k) => pending[k] > 0) || 'Ambiente') + '…');
+      return r;
+    });
   };
 
-  jobs.push(track(tryGLB(MANIFEST.player.url)).then((g) => {
+  jobs.push(track(tryGLB(MANIFEST.player.url), 'Personaggi').then((g) => {
     if (g) Assets.player = prepModel(g, MANIFEST.player.height, MANIFEST.player.yaw);
   }));
   for (const [name, z] of Object.entries(MANIFEST.characters)) {
     if (z.deferred) continue; // caricati dopo, in sottofondo
-    jobs.push(track(tryGLB(z.url)).then((g) => {
-      if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw));
+    jobs.push(track(tryGLB(z.url), 'Personaggi').then((g) => {
+      if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw, z));
     }));
   }
   for (const [name, def] of Object.entries(MANIFEST.guns)) {
-    jobs.push(track(tryGLB(def.url)).then((g) => {
+    jobs.push(track(tryGLB(def.url), 'Armi').then((g) => {
       if (g) {
         g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-        Assets.guns.set(name, { scene: g.scene, length: def.length });
+        Assets.guns.set(name, { scene: g.scene, length: def.length, animations: g.animations || [] });
       }
     }));
   }
   for (const [name, def] of Object.entries(MANIFEST.props)) {
-    jobs.push(track(tryGLB(def.url)).then((g) => {
+    jobs.push(track(tryGLB(def.url), 'Ambiente').then((g) => {
       if (g) {
         const prepped = prepModel(g, def.height, 0);
         prepped.scene.traverse((o) => { if (o.isMesh) o.frustumCulled = true; });
@@ -120,7 +210,7 @@ export async function loadAssets(onProgress) {
       }
     }));
   }
-  jobs.push(track(tryTex(MANIFEST.groundTexture)).then((t) => {
+  jobs.push(track(tryTex(MANIFEST.groundTexture), 'Ambiente').then((t) => {
     if (t) {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.colorSpace = THREE.SRGBColorSpace;
@@ -130,20 +220,73 @@ export async function loadAssets(onProgress) {
     }
   }));
 
+  // texture PBR realistiche per i terreni/muri delle zone (caricamento sincrono, leggere)
+  Assets.tex.forest = loadPBRSet(texLoader, PBR_SETS.forest, 9);
+  Assets.tex.cobble = loadPBRSet(texLoader, PBR_SETS.cobble, 7);
+  Assets.tex.rock = loadPBRSet(texLoader, PBR_SETS.rock, 4);
+  Assets.tex.planks = loadPBRSet(texLoader, PBR_SETS.planks, 2);
+  // terreno dell'hub: stesso set foresta (terra+foglie, adatto a un cimitero) ma su un piano
+  // molto più grande -> repeat alto per non sgranare. Set PBR dedicato (riusa i file in cache).
+  Assets.tex.hubGround = loadPBRSet(texLoader, PBR_SETS.forest, 30);
+  // pietra per lapidi/mausolei/statue procedurali: repeat basso = blocchi di pietra leggibili
+  Assets.tex.graveStone = loadPBRSet(texLoader, PBR_SETS.rock, 2);
+
   await Promise.all(jobs);
+
+  // Arricchisci lo zombie realistico (Hazmat, solo 4 clip) con una CORSA vera: retarget della
+  // clip "Run" del soldato — stesso rig Mixamo standard, basta rimappare i nomi delle ossa
+  // (il Hazmat ha il suffisso _NN). Così il runner corre davvero invece di "camminare veloce".
+  try {
+    const hz = Assets.characters.get('zombie_hazmat');
+    const sol = Assets.player;
+    if (hz && sol) {
+      const runSrc = (sol.animations || []).find((c) => /^run$/i.test(stripArmature(c.name)));
+      if (runSrc && !hz.animations.some((c) => /^run$/i.test(stripArmature(c.name)))) {
+        const rt = retargetSameFamily(runSrc, hz.scene, 'Run');
+        if (rt) hz.animations.push(rt);
+      }
+    }
+  } catch { /* il runner ricade sulla camminata velocizzata */ }
 
   if (!Assets.groundTexture) Assets.groundTexture = makeProceduralGroundTexture();
 }
 
+/**
+ * Retarget di una clip tra due scheletri della STESSA famiglia Mixamo che differiscono solo nei
+ * nomi delle ossa (es. `mixamorig:Hips` -> `mixamorig:Hips_01`). Rimappa i nomi delle tracce sulle
+ * ossa del target e scarta le tracce di posizione (tiene solo le rotazioni: niente drift/scala).
+ */
+function retargetSameFamily(srcClip, targetRoot, newName) {
+  const map = {};
+  targetRoot.traverse((o) => {
+    if (o.isBone) { const base = o.name.replace(/_\d+$/, ''); if (!(base in map)) map[base] = o.name; }
+  });
+  const tracks = [];
+  for (const t of srcClip.tracks) {
+    const dot = t.name.lastIndexOf('.');
+    const bone = t.name.slice(0, dot), prop = t.name.slice(dot + 1);
+    if (prop === 'position') continue; // niente traslazioni (evita drift/scala)
+    // niente rotazione di bacino/root: il bind dell'Hazmat è orientato diversamente da quello del
+    // soldato, quindi applicare la quaternione dell'Hips lo CORICA. Le gambe bastano per la corsa.
+    if (/hips/i.test(bone) || /(^|:)_?root/i.test(bone)) continue;
+    const target = map[bone] || map[bone.replace(/_\d+$/, '')];
+    if (!target) continue;
+    const nt = t.clone();
+    nt.name = target + '.' + prop;
+    tracks.push(nt);
+  }
+  return tracks.length ? new THREE.AnimationClip(newName, srcClip.duration, tracks) : null;
+}
+
 /** Carica in sottofondo i modelli pesanti non necessari all'avvio (scheletri). */
 export async function loadDeferredAssets() {
-  const loader = new GLTFLoader();
+  const loader = makeLoader();
   const tryGLB = (url) => new Promise((res) => loader.load(url, (g) => res(g), undefined, () => res(null)));
   const jobs = [];
   for (const [name, z] of Object.entries(MANIFEST.characters)) {
     if (!z.deferred || Assets.characters.has(name)) continue;
     jobs.push(tryGLB(z.url).then((g) => {
-      if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw));
+      if (g) Assets.characters.set(name, prepModel(g, z.height, z.yaw, z));
     }));
   }
   await Promise.all(jobs);
@@ -286,13 +429,13 @@ export function makeProceduralSoldier() {
 // KayKit (Walking_A, Running_B, 1H_Melee_Attack_Chop, Death_A, Spellcast_Shoot…).
 const PURPOSE_PATTERNS = {
   idle: [/^idle_gun$/i, /^idle$/i, /^idle_combat$/i, /^idle(?!_attack)/i, /idle/i],
-  walk: [/^walk_gun$/i, /^walk$/i, /^walking_[abc]$/i, /walking/i, /^walk/i, /run/i],
-  run: [/^run_gun$/i, /^run$/i, /^running_[ab]$/i, /running/i, /^run(?!_attack)/i, /walk/i],
-  crawl: [/^crawl$/i, /crawl/i, /walk/i],
-  attack: [/^punch$/i, /^attack$/i, /melee_attack/i, /^idle_attack$/i, /attack|punch|bite|slash|chop|stab|kick/i],
+  walk: [/^walk_gun$/i, /^walk$/i, /^walking_[abc]$/i, /walking/i, /^walk/i, /walk/i, /run/i],
+  run: [/^run_gun$/i, /^run$/i, /^running_[ab]$/i, /running/i, /^run(?!_attack)/i, /run/i, /walk/i],
+  crawl: [/^crawl$/i, /crawl/i, /creep/i, /walk/i],
+  attack: [/^punch$/i, /^attack$/i, /melee_attack/i, /^idle_attack$/i, /^fist$/i, /attack|punch|bite|slash|chop|stab|kick|fist/i, /skill/i],
   cast: [/^spellcast_shoot$/i, /spellcast/i, /ranged_shoot/i, /^attack$/i, /attack|punch/i],
-  death: [/^death$/i, /^death_[ab]$/i, /death/i, /die|dead/i],
-  hit: [/^hitreact/i, /^hit_[ab]$/i, /hit/i],
+  death: [/^death$/i, /^death_[ab]$/i, /death/i, /die|dead/i, /knock/i],
+  hit: [/^hitreact/i, /^hit_[ab]$/i, /hit/i, /damage/i],
   spawn: [/spawn_ground/i, /awaken_floor/i, /awaken/i],
 };
 
@@ -358,4 +501,11 @@ export class Animator {
   }
 
   update(dt) { this.mixer?.update(dt); }
+
+  /** Sfasa la clip corrente a un punto casuale: rompe la sincronia tra nemici simili. */
+  desync() {
+    if (!this.current) return;
+    const clip = this.current.getClip?.();
+    if (clip) this.current.time = Math.random() * clip.duration;
+  }
 }

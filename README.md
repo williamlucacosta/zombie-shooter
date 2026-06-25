@@ -41,6 +41,12 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
   e danno dei nemici, densità dell'orda e vita del giocatore — ma soprattutto il
   **dash** (cariche, ricarica, invulnerabilità), così a Incubo schivare diventa una
   risorsa rara da dosare con precisione.
+- **Hub + zone sbloccabili**: il cimitero centrale è circondato da 3 ambienti tematici
+  dietro porte a pagamento — **LA CRIPTA**, **LA CHIESA IN ROVINA**, **IL BOSCO DEGLI
+  IMPICCATI** — ognuno con terreno PBR realistico, luci, nebbia e atmosfera propri. Uccidere
+  frutta **Anime** (valuta separata dal punteggio): spendile (tasto **E** vicino al cancello)
+  per aprire nuove aree. Più stanze apri, **più l'orda diventa folta, veloce e letale** —
+  rischio/ricompensa. L'area giocabile e l'atmosfera si espandono man mano che avanzi.
 - **Temporali realistici occasionali**: scrosci di pioggia spinti dal vento, schizzi
   a terra, cielo che si fa cupo, fulmini con lampo a scatti e tuono ritardato dalla
   distanza. Alcune ondate (e certi boss) si combattono sotto l'acqua.
@@ -53,11 +59,36 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
 
 ## Crediti asset (CC0 salvo dove indicato)
 
-- **Personaggi e armi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
-  (zombi, mutante Big Arm, sopravvissuto Sam, cane, armi) via [poly.pizza](https://poly.pizza) — CC0
+- **Giocatore (soldato)**: "Vanguard" di T. Choonyung via [Adobe Mixamo](https://www.mixamo.com),
+  ridistribuito negli esempi di [three.js](https://github.com/mrdoob/three.js) — three.js MIT,
+  mesh Mixamo (royalty-free per uso commerciale)
+- **Zombi base (camminatore/corridore)**: **"Zombie Hazmat" di LxNazarov**
+  ([Sketchfab](https://sketchfab.com/3d-models/zombie-hazmat-49b3b4307f6a4d2386fdb02354158d04)) —
+  **CC BY 4.0** (attribuzione richiesta)
+- **Camminatore realistico**: **"Zombie (Rigged & Animated)" di Aiden Studios**
+  ([Sketchfab](https://sketchfab.com/3d-models/zombie-rigged-animated-131688807ad444609ed9b2ed572dc4aa)) —
+  **CC BY 4.0** (attribuzione richiesta). Scaricato via Download API ufficiale di Sketchfab.
+- **Corridore (9 animazioni: corsa/attacchi/morte/urlo)**: **"Zombie Fantasy Animated" di Larnox**
+  ([Sketchfab](https://sketchfab.com/3d-models/zombie-fantasy-animated-4e966d5df4e54260b69487919dbe7660)) —
+  **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
+- **Pistola (Glock-17 animata, clip sparo/ricarica)**: **"Glock-17 Animated (Free)" di BarcodeGames**
+  ([Sketchfab](https://sketchfab.com/3d-models/glock-17-animated-free-ab6ce788574147ce92b73d49915c123f)) —
+  **CC BY 4.0** (attribuzione richiesta)
+- **Brute / Boss (Mutant realistico, 13 animazioni di combattimento)**: "Mutant" di [Adobe Mixamo](https://www.mixamo.com)
+  (mesh + animazioni + texture creatura) — Mixamo royalty-free per uso commerciale. Crepe rese emissive nel gioco.
+- **Crawler (lupo che carica)**: **"Wolf with Animations" di 3DHaupt**
+  ([Sketchfab](https://sketchfab.com/3d-models/wolf-with-animations-f3769a474a714ebbbaca0d97f9b0a5a0)) —
+  **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
+- **Altri personaggi e armi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
+  (cane/hound, fucile/mitra/magnum; Big Arm e strisciante come ripieghi) via [poly.pizza](https://poly.pizza) — CC0
 - **Scheletri e scenografia cimitero**: [Kay Lousberg / KayKit](https://kaylousberg.com) —
   Skeletons Pack + Halloween Bits — CC0
-- **Texture terreno**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock — CC0
+- **Texture terreno/zone (PBR realistiche)**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock,
+  forrest_ground_01, cobblestone_floor_08, rock_wall_10, weathered_planks (diffuse+normale+rugosità) — CC0
+- **Props ambientazione realistici (PBR)**: [Poly Haven](https://polyhaven.com) — dead_tree_trunk +
+  dead_tree_trunk_02 (tronchi caduti), tree_stump_01, boulder_01, rock_07, rock_moss_set_01,
+  wooden_lantern_01, marble_bust_01 — CC0. Lapidi, mausolei e plinti delle statue sono geometria
+  PBR procedurale (materiale rock_wall_10). Scaricabili con `tools/download-ph-models.mjs`.
 - **Spari (registrazioni reali premium)**: Still North "Free Firearm Sound Library"
   ([buddingmonkey/FreeFirearmsSFXLibrary](https://github.com/buddingmonkey/FreeFirearmsSFXLibrary)) —
   Walther PPQ, Mossberg, AR-15, Smith & Wesson 642 — CC0

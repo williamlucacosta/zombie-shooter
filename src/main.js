@@ -6,15 +6,15 @@ import {
   EffectComposer, RenderPass, EffectPass,
   BloomEffect, VignetteEffect, SMAAEffect, ChromaticAberrationEffect,
 } from 'postprocessing';
-import { CONFIG, waveTheme, isBossWave, DIFFICULTIES, setDifficulty } from './config.js';
-import { loadAssets, loadDeferredAssets } from './assets.js';
+import { CONFIG, waveTheme, isBossWave, DIFFICULTIES, setDifficulty, soulsFor } from './config.js';
+import { loadAssets, loadDeferredAssets, Assets } from './assets.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Effects } from './effects.js';
 import { buildWorld } from './world.js';
 import { Rain } from './rain.js';
 import { Player } from './player.js';
-import { WaveDirector } from './enemies.js';
+import { WaveDirector, setConfine } from './enemies.js';
 import { Pickups } from './pickups.js';
 import { UI } from './ui.js';
 
@@ -66,8 +66,14 @@ const game = {
   scene, camera, renderer, ui, input,
   effects: null, world: null, rain: null, player: null, director: null, pickups: null,
   state: 'menu', // menu | playing | paused | dying | gameover
+  viewMode: 'topdown', // 'topdown' | 'fps'
+  fpsYaw: 0,
+  fpsPitch: 0,
   wave: 0,
   score: 0,
+  souls: 0,           // valuta "Anime" per aprire le porte (separata dal punteggio)
+  zonesUnlocked: 0,   // quante zone aperte (alza la difficoltà)
+  opt: { blood: true, damage: false }, // opzioni (toggle): sangue / numeri danno visibili
   comboMult: 1,
   comboT: 0,
   intermissionT: 0,
@@ -87,7 +93,9 @@ const game = {
     this.comboT = CONFIG.comboWindow;
     this.comboMult = Math.min(4, this.comboMult + 0.15);
     this.score += enemy.scoreValue * this.comboMult;
+    this.souls += soulsFor(enemy); // valuta per le porte
     ui.score(this.score);
+    ui.souls(this.souls);
     ui.combo(this.comboMult);
     this.director.onKill(enemy);
     if (enemy.boss) {
@@ -110,6 +118,7 @@ const game = {
 
   onPlayerDied() {
     this.state = 'dying';
+    setViewMode('topdown'); // morte e game over si vedono dall'alto, col cursore
     this.timeScale = 0.25;
     this.effects.addTrauma(0.8);
     Audio.setIntensity(0);
@@ -168,10 +177,37 @@ const game = {
     );
   },
 
+  // Apre la porta-gate più vicina spendendo Anime; alza la difficoltà globale.
+  tryUnlockGate() {
+    const gate = this.world.nearestGate(this.player.pos, 5);
+    if (!gate) return;
+    if (this.souls < gate.cost) {
+      ui.toast(`SERVONO ${gate.cost} ✦`);
+      Audio.play('click', { vol: 0.6 });
+      return;
+    }
+    this.souls -= gate.cost;
+    this.zonesUnlocked++;
+    this.world.unlockZone(gate.id);
+    ui.souls(this.souls);
+    ui.doorPrompt(null);
+    ui.banner(gate.name, gate.sub, 2800);
+    ui.toast(`${gate.name} APERTA — l'orda si fa più feroce`);
+    Audio.play('weapon_pickup', { vol: 1 });
+    Audio.playAt('boss_roar', gate.pos, this.player.pos, { vol: 0.8 });
+    this.effects.addTrauma(0.45);
+    this.effects.spawnPillar(gate.pos, 0xffd070, 2.6);
+  },
+
   startRun() {
     this.director.clear();
     this.pickups.clear();
     this.player.reset();
+    this.world.resetZones();
+    this.souls = 0;
+    this.zonesUnlocked = 0;
+    ui.souls(0);
+    ui.doorPrompt(null);
     this.score = 0;
     this.comboMult = 1;
     this.comboT = 0;
@@ -205,34 +241,95 @@ const game = {
 const best0 = Number(localStorage.getItem('noh_best') || 0);
 Audio.init(); // contesto sospeso finché l'utente non clicca
 
-(async () => {
-  // Modelli e SFX essenziali caricati IN PARALLELO; la musica (pesante) è differita.
-  let mp = 0, ap = 0;
-  const upd = () => ui.loading(mp * 0.5 + ap * 0.5, 'Caricamento risorse…');
-  await Promise.all([
-    loadAssets((f) => { mp = f; upd(); }),
-    Audio.loadFiles((f) => { ap = f; upd(); }),
-  ]);
+// cede il thread al browser così l'etichetta di caricamento viene davvero disegnata
+// prima di un blocco di lavoro sincrono (build mondo / compilazione shader).
+const paint = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
+(async () => {
+  const T = (window.__loadTimes = { t0: performance.now() });
+  // Modelli e SFX essenziali caricati IN PARALLELO; la musica (pesante) è differita.
+  // L'etichetta segue la categoria caricata dai modelli; l'audio aggiorna solo la barra.
+  let mp = 0, ap = 0;
+  await Promise.all([
+    loadAssets((f, label) => { mp = f; ui.loading(mp * 0.5 + ap * 0.5, label); }),
+    Audio.loadFiles((f) => { ap = f; ui.loading(mp * 0.5 + ap * 0.5); }),
+  ]);
+  T.assets = performance.now() - T.t0;
+
+  ui.loading(1, 'Costruzione del cimitero…');
+  await paint();
   game.effects = new Effects(scene);
   game.world = buildWorld(scene);
   game.colliders = game.world.colliders;
+  setConfine(game.world.confine); // l'area giocabile è l'unione delle stanze attive
   game.rain = new Rain(scene);
   game.player = new Player(game);
   game.director = new WaveDirector(game);
   game.pickups = new Pickups(game);
+  T.world = performance.now() - T.t0;
 
+  // Menu pronto SUBITO dopo il mondo: la compilazione shader non blocca più l'avvio. Gira
+  // incrementale in sottofondo (un modello per frame) mentre l'utente legge il menu — finisce
+  // molto prima del primo nemico (≥2.4s dopo "GIOCA"), quindi nessuno scatto al primo spawn.
   ui.readyToPlay(best0);
   setDiffEnabled(true); // la difficoltà è scegliibile solo a risorse caricate
+  T.ready = performance.now() - T.t0;
 
-  // risorse pesanti non necessarie all'avvio: musica e scheletri (ondata 6+)
+  prewarmShaders();
+
+  // risorse pesanti non necessarie all'avvio: musica + nemici tardivi (runner/brute/scheletri/wolf)
   Audio.loadDeferred();
-  loadDeferredAssets();
+  loadDeferredAssets().then(prewarmShaders); // pre-compila anche i differiti appena arrivano
 })();
+
+// Pre-scalda gli shader dei modelli per evitare lo scatto al primo spawn. NON basta
+// `renderer.compile`: quello linka solo il programma PRINCIPALE (che RICEVE ombre), ma il
+// programma di PROFONDITÀ del caster d'ombra (lo skinned depth material) three lo compila solo
+// al primo render della shadow map -> da lì il freeze di 1-2s quando un nemico compare. Qui
+// facciamo un RENDER vero fuori schermo (su un render target minuscolo: nessun lampeggio) con
+// `shadowMap.needsUpdate` forzato: compila main + depth d'ombra E carica le texture sulla GPU.
+// Lavora INCREMENTALE (un modello per frame) così non congela il menu. Chiamabile più volte:
+// accoda solo le scene nuove (i cloni tinti riusano lo stesso programma, la tinta è una uniform).
+const _warmRT = new THREE.WebGLRenderTarget(8, 8);
+const _prewarmed = new Set();
+const _prewarmQueue = [];
+let _prewarmRunning = false;
+function prewarmShaders() {
+  if (!game.player) return;
+  const add = (s) => { if (s && !_prewarmed.has(s)) { _prewarmed.add(s); _prewarmQueue.push(s); } };
+  add(Assets.player?.scene);
+  for (const c of Assets.characters.values()) add(c.scene);
+  for (const g of Assets.guns.values()) add(g.scene);
+  if (_prewarmRunning) return;
+  _prewarmRunning = true;
+  if (window.__loadTimes) window.__loadTimes.prewarmRunning = true;
+  const step = () => {
+    const s = _prewarmQueue.shift();
+    if (!s) {
+      _prewarmRunning = false;
+      if (window.__loadTimes) { window.__loadTimes.prewarmRunning = false; window.__loadTimes.prewarmDone = performance.now() - window.__loadTimes.t0; }
+      return;
+    }
+    if (!s.parent) {
+      scene.add(s);
+      const prev = renderer.getRenderTarget();
+      try {
+        renderer.shadowMap.needsUpdate = true; // forza il render della shadow map -> compila il depth program skinnato
+        renderer.setRenderTarget(_warmRT);     // fuori schermo: niente lampeggio dietro il menu
+        renderer.render(scene, camera);        // compila main + depth d'ombra + carica le texture
+      } catch { /* best effort */ }
+      finally { renderer.setRenderTarget(prev); scene.remove(s); }
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 window.__game = game; // diagnostica
 window.__CONFIG = CONFIG; // permette test/tuning della camera a runtime
 window.__audio = Audio; // diagnostica audio nei test
+window.__assets = Assets; // diagnostica asset (verifica caricamento modelli nei test)
+window.__THREE = THREE; // diagnostica (bounding box nei test, es. appoggio dei cadaveri)
 
 // ------------------------------------------------------------- pulsanti --
 
@@ -256,19 +353,42 @@ function setDiffEnabled(on) {
 }
 setDiffEnabled(false);
 
+// --- opzioni (sangue / numeri danno): persistite in localStorage, applicate live, sincronizzate
+//     tra menu e pausa. enemies.js legge game.opt a ogni colpo. ---
+function initOption(key, def) {
+  const saved = localStorage.getItem('noh_opt_' + key);
+  game.opt[key] = saved === null ? def : saved === '1';
+  for (const cb of document.querySelectorAll(`[data-opt="${key}"]`)) {
+    cb.checked = game.opt[key];
+    cb.addEventListener('change', () => {
+      game.opt[key] = cb.checked;
+      localStorage.setItem('noh_opt_' + key, cb.checked ? '1' : '0');
+      for (const o of document.querySelectorAll(`[data-opt="${key}"]`)) o.checked = cb.checked;
+      Audio.play('click', { vol: 0.5 });
+    });
+  }
+}
+initOption('blood', true);
+initOption('damage', false);
+
 // Torna al menu (da game over o abbandono): qui si può ricambiare difficoltà.
 function returnToMenu() {
   game.state = 'menu';
+  setViewMode('topdown');
   game.director.clear();
   game.pickups.clear();
   game.rain.stop();
   Audio.setRain(false);
   game.weatherDark = 0;
   game.wave = 0;
+  game.souls = 0;
+  game.zonesUnlocked = 0;
+  game.world.resetZones();
   game.player.reset();
   game.player.gunMount.visible = false;
   ui.bossHide();
   ui.countdown(null);
+  ui.doorPrompt(null);
   ui.showScreen('menu');
   setDiffEnabled(true);
 }
@@ -279,22 +399,69 @@ ui.el.btnResume.addEventListener('click', () => togglePause());
 ui.el.btnQuit.addEventListener('click', () => returnToMenu());           // ABBANDONA -> menu
 document.getElementById('btn-gameover-menu').addEventListener('click', () => returnToMenu());
 
-for (const [id, fn] of [['vol-master', 'setMaster'], ['vol-music', 'setMusic'], ['vol-sfx', 'setSfx']]) {
-  document.getElementById(id).addEventListener('input', (e) => Audio[fn](e.target.value / 100));
+// Volume persistito in localStorage. La MUSICA parte muta (0) di default: l'utente la alza
+// dalla scheda Opzioni (rondella) e la scelta resta salvata.
+for (const [id, fn, def] of [['vol-master', 'setMaster', 80], ['vol-music', 'setMusic', 0], ['vol-sfx', 'setSfx', 90]]) {
+  const el = document.getElementById(id);
+  const saved = localStorage.getItem('noh_' + id);
+  const val = saved === null ? def : Number(saved);
+  el.value = val;
+  Audio[fn](val / 100);
+  el.addEventListener('input', (e) => {
+    Audio[fn](e.target.value / 100);
+    localStorage.setItem('noh_' + id, e.target.value);
+  });
 }
+
+// --- scheda OPZIONI (rondella): apribile da menu e da pausa, torna alla schermata di partenza ---
+let optionsReturn = 'menu';
+function openOptions(from) { optionsReturn = from; ui.showScreen('options'); Audio.play('click', { vol: 0.5 }); }
+function closeOptions() { ui.showScreen(optionsReturn); Audio.play('click', { vol: 0.5 }); }
+document.getElementById('btn-options').addEventListener('click', () => openOptions('menu'));
+document.getElementById('btn-options-pause').addEventListener('click', () => openOptions('pause'));
+document.getElementById('btn-options-close').addEventListener('click', () => closeOptions());
 
 function togglePause() {
   if (game.state === 'playing') {
     game.state = 'paused';
     ui.showScreen('pause');
+    ui.doorPrompt(null);
     Audio.setMusic(0.25 * (document.getElementById('vol-music').value / 100));
+    input.exitLock(); // libera il cursore in pausa
   } else if (game.state === 'paused') {
     game.state = 'playing';
     ui.showScreen(null);
     Audio.setMusic(document.getElementById('vol-music').value / 100);
     Audio.resume();
+    if (game.viewMode === 'fps') input.requestLock(); // riaggancia il puntatore (gesto: Riprendi)
   }
 }
+
+// Cambia visuale: dall'alto (twin-stick) <-> prima persona (FPS, mouse-look + pointer lock).
+function setViewMode(mode) {
+  if (!game.player || mode === game.viewMode) return;
+  game.viewMode = mode;
+  const fps = mode === 'fps';
+  input.wantLock = fps;
+  game.player.setFpsView(fps);
+  camera.near = fps ? 0.08 : 0.5; // evita il clipping dell'arma/nemici vicini in FPS
+  camera.updateProjectionMatrix();
+  if (fps) {
+    game.fpsYaw = Math.atan2(game.player.aimDir.x, game.player.aimDir.z); // parte da dove miravi
+    game.fpsPitch = 0;
+    if (game.state === 'playing') input.requestLock();
+    ui.banner('PRIMA PERSONA', 'V per tornare alla visuale dall’alto', 1500);
+  } else {
+    input.exitLock();
+  }
+}
+
+// Tasto V: alterna visuale dall'alto / prima persona (solo in partita).
+addEventListener('keydown', (e) => {
+  if (e.code === 'KeyV' && !e.repeat && game.state === 'playing') {
+    setViewMode(game.viewMode === 'fps' ? 'topdown' : 'fps');
+  }
+});
 
 // --------------------------------------------------------------- loop ----
 
@@ -308,33 +475,55 @@ const shake = new THREE.Vector3();
 let heartbeatT = 0;
 let intensityT = 0;
 // atmosfera base (vedi world.js) e colore tempesta per il meteo
-const BASE_FOG = 0.018, BASE_EXPO = 1.35;
+const BASE_FOG = 0.018, BASE_EXPO = 1.45;
 const STORM_COLOR = new THREE.Color(0x2a3340);
+const BG_BASE = new THREE.Color(0x05070f);
 
 renderer.setAnimationLoop(() => {
   const rawDt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  if (input.wasPressed('Escape') && (game.state === 'playing' || game.state === 'paused')) {
-    togglePause();
+  if (input.wasPressed('Escape')) {
+    if (!ui.el.options.classList.contains('hidden')) closeOptions(); // Esc chiude la scheda opzioni
+    else if (game.state === 'playing' || game.state === 'paused') togglePause();
   }
 
-  ui.crosshairPos(input.mousePix.x, input.mousePix.y);
+  if (game.viewMode === 'fps' && game.state === 'playing') ui.crosshairPos(innerWidth / 2, innerHeight / 2);
+  else ui.crosshairPos(input.mousePix.x, input.mousePix.y);
 
   const playing = game.state === 'playing' || game.state === 'dying';
   if (playing && game.world) {
     const dt = rawDt * game.timeScale;
     game.stats.time += rawDt;
 
-    // punto di mira sul terreno
-    raycaster.setFromCamera(input.mouseNDC, camera);
-    raycaster.ray.intersectPlane(groundPlane, aimPoint) || aimPoint.copy(game.player.pos);
+    if (game.viewMode === 'fps') {
+      // mouse-look: i delta del mouse ruotano lo sguardo (yaw + pitch)
+      const sens = 0.0022;
+      game.fpsYaw -= input.lookDX * sens; // mouse a destra -> guarda a destra
+      game.fpsPitch = THREE.MathUtils.clamp(game.fpsPitch - input.lookDY * sens, -1.15, 0.75);
+      // mira lungo lo sguardo orizzontale (i nemici sono a terra)
+      aimPoint.set(
+        game.player.pos.x + Math.sin(game.fpsYaw) * 12, 0,
+        game.player.pos.z + Math.cos(game.fpsYaw) * 12,
+      );
+    } else {
+      // punto di mira sul terreno (twin-stick)
+      raycaster.setFromCamera(input.mouseNDC, camera);
+      raycaster.ray.intersectPlane(groundPlane, aimPoint) || aimPoint.copy(game.player.pos);
+    }
 
     game.player.update(dt, input, aimPoint, game.director.enemies);
     game.director.update(dt);
     game.pickups.update(dt, game.player, t);
     game.effects.update(dt);
-    game.world.update(dt, t);
+    game.world.update(dt, t, game.player.pos);
+
+    // porte verso le zone: prompt quando vicino, apertura con E
+    if (game.state === 'playing') {
+      const gate = game.world.nearestGate(game.player.pos, 5);
+      ui.doorPrompt(gate, game.souls);
+      if (gate && input.wasPressed('KeyE')) game.tryUnlockGate();
+    }
 
     // combo
     if (game.comboT > 0) {
@@ -368,38 +557,45 @@ renderer.setAnimationLoop(() => {
       Audio.setIntensity(Math.min(1, game.director.aliveCount() / 12));
     }
 
-    // camera: segue il giocatore, anticipa verso la mira
-    camTarget.copy(game.player.pos);
-    camTarget.x += (aimPoint.x - game.player.pos.x) * CONFIG.camera.aimPull;
-    camTarget.z += (aimPoint.z - game.player.pos.z) * CONFIG.camera.aimPull;
-    camDesired.set(camTarget.x, CONFIG.camera.offsetY, camTarget.z + CONFIG.camera.offsetZ);
-    const k = 1 - Math.exp(-CONFIG.camera.lerp * rawDt);
-    camera.position.lerp(camDesired, k);
     game.effects.shakeOffset(shake);
-    camera.position.add(shake);
-    camera.lookAt(camTarget.x + shake.x * 0.5, 0, camTarget.z + shake.z * 0.5);
+    if (game.viewMode === 'fps') {
+      // camera negli occhi del giocatore, orientata lungo yaw+pitch
+      const p = game.player.pos, eye = 1.62;
+      const cp = Math.cos(game.fpsPitch);
+      const dx = Math.sin(game.fpsYaw) * cp, dy = Math.sin(game.fpsPitch), dz = Math.cos(game.fpsYaw) * cp;
+      camera.position.set(p.x + shake.x * 0.35, eye + shake.y * 0.35, p.z + shake.z * 0.35);
+      camera.lookAt(p.x + dx, eye + dy, p.z + dz);
+    } else {
+      // camera dall'alto: segue il giocatore, anticipa verso la mira
+      camTarget.copy(game.player.pos);
+      camTarget.x += (aimPoint.x - game.player.pos.x) * CONFIG.camera.aimPull;
+      camTarget.z += (aimPoint.z - game.player.pos.z) * CONFIG.camera.aimPull;
+      camDesired.set(camTarget.x, CONFIG.camera.offsetY, camTarget.z + CONFIG.camera.offsetZ);
+      const k = 1 - Math.exp(-CONFIG.camera.lerp * rawDt);
+      camera.position.lerp(camDesired, k);
+      camera.position.add(shake);
+      camera.lookAt(camTarget.x + shake.x * 0.5, 0, camTarget.z + shake.z * 0.5);
+    }
   } else if (game.world) {
     // anche nei menu la scena vive: nebbia, lucciole, lanterne
-    game.world.update(rawDt, t);
+    game.world.update(rawDt, t, game.player ? game.player.pos : null);
     game.effects?.update(rawDt);
     camera.position.lerp(camDesired.set(Math.sin(t * 0.05) * 4, CONFIG.camera.offsetY, CONFIG.camera.offsetZ + Math.cos(t * 0.07) * 2), 0.02);
     camera.lookAt(0, 0, 0);
   }
 
-  // pioggia e meteo (in tempo reale, in ogni stato così sfumano correttamente)
+  // pioggia e meteo (in tempo reale, in ogni stato così sfumano correttamente).
+  // La nebbia BASE viene dalla zona in cui si trova il giocatore (world.atmoFog/atmoDensity);
+  // il meteo la inscurisce/ispessisce sopra.
   if (game.rain) {
     game.rain.update(rawDt, game.player ? game.player.pos : null, game.effects);
     game._dark += (game.weatherDark - game._dark) * (1 - Math.exp(-2.0 * rawDt));
-    if (game._dark > 0.001) {
-      const d = game._dark;
-      scene.fog.density = BASE_FOG * (1 + 1.8 * d);
-      renderer.toneMappingExposure = BASE_EXPO * (1 - 0.34 * d);
-      if (game._baseFog) scene.fog.color.copy(game._baseFog).lerp(STORM_COLOR, 0.55 * d);
-      if (game._baseBg && scene.background) scene.background.copy(game._baseBg).lerp(STORM_COLOR, 0.4 * d);
-    } else {
-      scene.fog.density = BASE_FOG;
-      renderer.toneMappingExposure = BASE_EXPO;
-    }
+    const d = game._dark;
+    const baseDens = game.world ? game.world.atmoDensity : BASE_FOG;
+    scene.fog.density = baseDens * (1 + 1.8 * d);
+    renderer.toneMappingExposure = BASE_EXPO * (1 - 0.34 * d);
+    if (game.world) scene.fog.color.copy(game.world.atmoFog).lerp(STORM_COLOR, 0.55 * d);
+    if (scene.background) scene.background.copy(BG_BASE).lerp(STORM_COLOR, 0.4 * d);
   }
 
   composer.render(rawDt);

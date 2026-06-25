@@ -1,7 +1,8 @@
 // Tutte le costanti di bilanciamento e le definizioni di armi, nemici, ondate e boss.
 
 export const CONFIG = {
-  arenaRadius: 34,
+  arenaRadius: 34,    // raggio del recinto dell'hub (cimitero)
+  hubRadius: 31,      // raggio dell'area giocabile dell'hub (room centrale)
   camera: { offsetY: 19.5, offsetZ: 14, lerp: 6.0, aimPull: 0.22 },
   player: {
     speed: 8.4, hp: 100, radius: 0.55,
@@ -12,6 +13,51 @@ export const CONFIG = {
   critChance: 0.12,
   critMult: 1.8,
 };
+
+// --- valuta "Anime": guadagnata uccidendo, spesa per aprire le porte (il punteggio
+//     resta intatto per il record). I morti più pericolosi rendono più Anime. ---
+export const SOULS = { perKill: 0.28, eliteMult: 3, bossBonus: 90 };
+export function soulsFor(enemy) {
+  if (enemy.boss) return Math.round((enemy.scoreValue * SOULS.perKill) + SOULS.bossBonus);
+  return Math.max(1, Math.round(enemy.scoreValue * SOULS.perKill * (enemy.elite ? SOULS.eliteMult : 1)));
+}
+
+// --- Zone sbloccabili: hub centrale + 3 ambienti tematici dietro porte a pagamento.
+//     angle = direzione dal centro; radius = ampiezza della stanza; cost = Anime per aprire;
+//     tier = quanto pesa sulla difficoltà globale; il resto è atmosfera per-zona. ---
+export const ZONES = [
+  {
+    id: 'crypt', name: 'LA CRIPTA', sub: 'I sepolti senza nome',
+    angle: -Math.PI / 2, radius: 18, cost: 300, tier: 1,
+    fog: 0x05080e, fogDensity: 0.045, tint: 0x6f8ad0, ambient: 0x2a3550,
+    ground: 'cobble', lightColor: 0x8fb0ff,
+  },
+  {
+    id: 'church', name: 'LA CHIESA IN ROVINA', sub: 'Dove la fede è morta',
+    angle: Math.PI / 6, radius: 20, cost: 750, tier: 2,
+    fog: 0x0c0a07, fogDensity: 0.038, tint: 0xffb060, ambient: 0x3a2a18,
+    ground: 'cobble', lightColor: 0xffae5a,
+  },
+  {
+    id: 'wood', name: 'IL BOSCO DEGLI IMPICCATI', sub: 'Nessuno ne è mai uscito',
+    angle: (5 * Math.PI) / 6, radius: 19, cost: 1500, tier: 3,
+    fog: 0x060a06, fogDensity: 0.05, tint: 0x86c070, ambient: 0x1e3018,
+    ground: 'forest', lightColor: 0x9fe080,
+  },
+];
+
+// Scaling della difficoltà in base alle zone aperte (più stanze = più dura).
+export function depthMods(zonesUnlocked) {
+  const d = zonesUnlocked;
+  return {
+    hp: 1 + 0.28 * d,
+    speed: 1 + 0.05 * d,
+    dmg: 1 + 0.16 * d,
+    maxAlive: 1 + 0.4 * d,
+    spawn: Math.max(0.45, 1 - 0.14 * d), // intervallo di spawn più corto
+    count: 1 + 0.22 * d,                 // più nemici per ondata
+  };
+}
 
 // Livelli di difficoltà. Oltre a HP/velocità/danno dei nemici e densità di spawn,
 // modulano fortemente il DASH (cariche, ricarica, finestra di invulnerabilità):
@@ -53,25 +99,26 @@ export function setDifficulty(key) {
 }
 
 export const WEAPONS = {
+  // tracer/light: toni caldi reali (ottone incandescente / bianco-caldo), non plasma colorato.
   pistol: {
     id: 'pistol', slot: 1, name: 'PISTOLA', dmg: 14, rof: 0.21, mag: 12, reload: 1.0,
-    spread: 1.6, speed: 72, pellets: 1, pierce: 0, reserve: Infinity, auto: false,
-    knock: 1.6, tracer: 0x9fd8ff, shake: 0.07, light: 0xfff2c0,
+    spread: 1.6, speed: 96, pellets: 1, pierce: 0, reserve: Infinity, auto: false,
+    knock: 1.6, tracer: 0xffd49a, shake: 0.07, light: 0xfff0c8,
   },
   shotgun: {
     id: 'shotgun', slot: 2, name: 'FUCILE A POMPA', dmg: 9, rof: 0.85, mag: 6, reload: 2.0,
-    spread: 8.5, speed: 62, pellets: 7, pierce: 0, reserve: 30, maxReserve: 48, auto: false,
-    knock: 5.0, tracer: 0xffc97a, shake: 0.24, light: 0xffd9a0,
+    spread: 8.5, speed: 70, pellets: 7, pierce: 0, reserve: 30, maxReserve: 48, auto: false,
+    knock: 5.0, tracer: 0xffc079, shake: 0.24, light: 0xffd29a,
   },
   smg: {
     id: 'smg', slot: 3, name: 'MITRA', dmg: 8, rof: 0.082, mag: 34, reload: 1.6,
-    spread: 4.2, speed: 78, pellets: 1, pierce: 0, reserve: 160, maxReserve: 260, auto: true,
-    knock: 1.0, tracer: 0xaaffc8, shake: 0.05, light: 0xd8ffe0,
+    spread: 4.2, speed: 104, pellets: 1, pierce: 0, reserve: 160, maxReserve: 260, auto: true,
+    knock: 1.0, tracer: 0xffe0a4, shake: 0.05, light: 0xfff0cc,
   },
   magnum: {
     id: 'magnum', slot: 4, name: 'MAGNUM', dmg: 65, rof: 0.7, mag: 5, reload: 1.9,
-    spread: 0.5, speed: 96, pellets: 1, pierce: 3, reserve: 20, maxReserve: 35, auto: false,
-    knock: 7.0, tracer: 0xff8a7a, shake: 0.2, light: 0xffb0a0,
+    spread: 0.5, speed: 120, pellets: 1, pierce: 3, reserve: 20, maxReserve: 35, auto: false,
+    knock: 7.0, tracer: 0xfff1cc, shake: 0.2, light: 0xffe6c0,
   },
 };
 
@@ -82,17 +129,18 @@ export const ENEMY_TYPES = {
   walker: {
     id: 'walker', hp: 32, speed: 2.3, dmg: 9, scale: 1.0, radius: 0.55,
     attackRange: 1.7, attackTime: 1.15, hitTime: 0.55, score: 10, stagger: 16, anim: 'walk',
-    models: ['zombie_a', 'zombie_b'], lateModels: ['skeleton_a', 'skeleton_c'],
+    // Aiden = zombie realistico emaciato (idle/walk/attack); Hazmat e scheletri come varianti tardive.
+    models: ['zombie_aiden'], lateModels: ['zombie_hazmat', 'skeleton_a', 'skeleton_c'], animRef: 1.2,
   },
   runner: {
     id: 'runner', hp: 20, speed: 5.3, dmg: 7, scale: 0.92, radius: 0.5,
     attackRange: 1.6, attackTime: 0.9, hitTime: 0.42, score: 15, stagger: 14, anim: 'run',
-    models: ['zombie_b', 'zombie_a'],
+    models: ['zombie_larnox'], animRef: 4.0, // Larnox: corsa/attacchi/morte/urlo veri
   },
   crawler: {
     id: 'crawler', hp: 16, speed: 4.3, dmg: 6, scale: 1.0, radius: 0.45,
-    attackRange: 1.25, attackTime: 0.8, hitTime: 0.4, score: 12, stagger: 10, anim: 'crawl',
-    models: ['zombie_d'], lowProfile: true,
+    attackRange: 1.4, attackTime: 0.8, hitTime: 0.4, score: 12, stagger: 10, anim: 'run',
+    models: ['wolf', 'zombie_d'], lowProfile: true, animRef: 4.0, // cane/lupo che carica (ex strisciante)
   },
   hound: {
     id: 'hound', hp: 26, speed: 6.4, dmg: 10, scale: 1.0, radius: 0.5,
@@ -102,7 +150,7 @@ export const ENEMY_TYPES = {
   brute: {
     id: 'brute', hp: 155, speed: 1.75, dmg: 24, scale: 1.5, radius: 0.85,
     attackRange: 2.3, attackTime: 1.5, hitTime: 0.78, score: 40, stagger: 45, anim: 'walk',
-    models: ['zombie_c'],
+    models: ['mutant', 'zombie_c'], animRef: 2.8, // Mutant realistico (corsa pesante rallentata)
   },
   spitter: {
     id: 'spitter', hp: 38, speed: 2.7, dmg: 13, scale: 1.05, radius: 0.55,
@@ -128,7 +176,7 @@ export const WAVE_THEMES = [
 
 export const BOSSES = [
   {
-    name: 'IL CARNEFICE', sub: 'Macellaio dell\'orda', baseType: 'brute', model: 'zombie_c',
+    name: 'IL CARNEFICE', sub: 'Macellaio dell\'orda', baseType: 'brute', model: 'mutant',
     scale: 2.35, hp: 950, speed: 2.1, dmg: 32, radius: 1.5, score: 500,
     tint: 0xb04040, emissive: 0x550000, glow: 1.4, abilities: ['charge', 'slam'],
   },
@@ -138,7 +186,7 @@ export const BOSSES = [
     tint: 0x70d060, emissive: 0x0a4a00, glow: 1.6, abilities: ['summon', 'barrage', 'slam'],
   },
   {
-    name: 'IL DIVORATORE', sub: 'La fine di ogni cosa', baseType: 'brute', model: 'zombie_c',
+    name: 'IL DIVORATORE', sub: 'La fine di ogni cosa', baseType: 'brute', model: 'mutant',
     scale: 2.7, hp: 2300, speed: 2.3, dmg: 40, radius: 1.7, score: 1500,
     tint: 0x9050c0, emissive: 0x33005a, glow: 1.8, abilities: ['charge', 'slam', 'summon', 'barrage'],
   },
