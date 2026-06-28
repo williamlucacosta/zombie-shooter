@@ -268,61 +268,68 @@ const paint = () => new Promise((r) => requestAnimationFrame(() => requestAnimat
   game.pickups = new Pickups(game);
   T.world = performance.now() - T.t0;
 
-  // Menu pronto SUBITO dopo il mondo: la compilazione shader non blocca più l'avvio. Gira
-  // incrementale in sottofondo (un modello per frame) mentre l'utente legge il menu — finisce
-  // molto prima del primo nemico (≥2.4s dopo "GIOCA"), quindi nessuno scatto al primo spawn.
-  ui.readyToPlay(best0);
-  setDiffEnabled(true); // la difficoltà è scegliibile solo a risorse caricate
+  // Carica E scalda TUTTO durante la barra, così quando appare il menu il gioco è già fluido
+  // (niente lag mentre scegli la difficoltà). I nemici "differiti" si caricano in parallelo alla
+  // preparazione della scena; poi compilo gli shader di tutti i modelli. Solo la MUSICA (pesante e
+  // ininfluente sul rendering) resta in sottofondo dopo il menu.
+  const deferredP = loadDeferredAssets(); // rete in parallelo al warm del mondo
+  ui.loading(1, 'Preparazione scena…');
+  await warmPipeline();                   // mondo + postprocessing + ombre + texture (visibile)
+  ui.loading(1, 'Caricamento nemici…');
+  await deferredP;
+  ui.loading(1, 'Compilazione shader…');
+  await prewarmShaders();                 // tutti i modelli: programma principale + d'ombra
   T.ready = performance.now() - T.t0;
 
-  prewarmShaders();
-
-  // risorse pesanti non necessarie all'avvio: musica + nemici tardivi (runner/brute/scheletri/wolf)
-  Audio.loadDeferred();
-  loadDeferredAssets().then(prewarmShaders); // pre-compila anche i differiti appena arrivano
+  ui.readyToPlay(best0);
+  setDiffEnabled(true); // la difficoltà è scegliibile solo a risorse caricate
+  Audio.loadDeferred(); // musica in sottofondo: non influisce sul rendering, può arrivare dopo
 })();
 
-// Pre-scalda gli shader dei modelli per evitare lo scatto al primo spawn. NON basta
-// `renderer.compile`: quello linka solo il programma PRINCIPALE (che RICEVE ombre), ma il
-// programma di PROFONDITÀ del caster d'ombra (lo skinned depth material) three lo compila solo
-// al primo render della shadow map -> da lì il freeze di 1-2s quando un nemico compare. Qui
-// facciamo un RENDER vero fuori schermo (su un render target minuscolo: nessun lampeggio) con
-// `shadowMap.needsUpdate` forzato: compila main + depth d'ombra E carica le texture sulla GPU.
-// Lavora INCREMENTALE (un modello per frame) così non congela il menu. Chiamabile più volte:
-// accoda solo le scene nuove (i cloni tinti riusano lo stesso programma, la tinta è una uniform).
+// Scalda la pipeline VISIBILE (mondo + postprocessing + ombre + texture) facendo qualche render
+// reale del mondo: il loop (stato 'menu') renderizza la scena -> compila bloom/CA, genera la
+// shadow map dell'intero mondo e carica le texture. È il "primo render" pesante, qui nella barra.
+async function warmPipeline() {
+  if (!game.player) return;
+  for (let i = 0; i < 2; i++) { renderer.shadowMap.needsUpdate = true; await paint(); }
+}
+
+// Pre-scalda gli shader di TUTTI i modelli caricati (evita lag in gioco). Due programmi distinti:
+//  • PRINCIPALE: `renderer.compileAsync` -> compilazione PARALLELA (KHR_parallel_shader_compile),
+//    il main thread NON si blocca. I modelli sono tenuti INVISIBILI durante l'attesa, sennò il loop
+//    li renderizzerebbe (lampeggio dietro la barra).
+//  • PROFONDITÀ (caster d'ombra skinnato): compileAsync NON lo compila (lo fa three solo al render
+//    della shadow map) -> un solo render batch di tutti i modelli, fuori schermo. Stallo minimo.
 const _warmRT = new THREE.WebGLRenderTarget(8, 8);
 const _prewarmed = new Set();
-const _prewarmQueue = [];
-let _prewarmRunning = false;
-function prewarmShaders() {
+async function prewarmShaders() {
   if (!game.player) return;
-  const add = (s) => { if (s && !_prewarmed.has(s)) { _prewarmed.add(s); _prewarmQueue.push(s); } };
+  if (window.__loadTimes) window.__loadTimes.prewarmRunning = true;
+  const temps = [];
+  const add = (s) => { if (s && !s.parent && !_prewarmed.has(s)) { _prewarmed.add(s); s.visible = false; scene.add(s); temps.push(s); } };
   add(Assets.player?.scene);
   for (const c of Assets.characters.values()) add(c.scene);
   for (const g of Assets.guns.values()) add(g.scene);
-  if (_prewarmRunning) return;
-  _prewarmRunning = true;
-  if (window.__loadTimes) window.__loadTimes.prewarmRunning = true;
-  const step = () => {
-    const s = _prewarmQueue.shift();
-    if (!s) {
-      _prewarmRunning = false;
-      if (window.__loadTimes) { window.__loadTimes.prewarmRunning = false; window.__loadTimes.prewarmDone = performance.now() - window.__loadTimes.t0; }
-      return;
+  if (temps.length) {
+    try { await renderer.compileAsync(scene, camera); } catch { /* best effort */ }
+    for (const s of temps) s.visible = true;
+    // l'arma in mano (glock, già nella scena via gunMount ma invisibile nel menu) la rendo visibile
+    // per questo solo render, così scalda anche il suo programma d'ombra: niente scatto al via.
+    const gm = game.player.gunMount, gmVis = gm?.visible;
+    if (gm) gm.visible = true;
+    const prev = renderer.getRenderTarget();
+    try {
+      renderer.shadowMap.needsUpdate = true;
+      renderer.setRenderTarget(_warmRT);
+      renderer.render(scene, camera);
+    } catch { /* best effort */ }
+    finally {
+      renderer.setRenderTarget(prev);
+      if (gm) gm.visible = gmVis;
+      for (const s of temps) scene.remove(s);
     }
-    if (!s.parent) {
-      scene.add(s);
-      const prev = renderer.getRenderTarget();
-      try {
-        renderer.shadowMap.needsUpdate = true; // forza il render della shadow map -> compila il depth program skinnato
-        renderer.setRenderTarget(_warmRT);     // fuori schermo: niente lampeggio dietro il menu
-        renderer.render(scene, camera);        // compila main + depth d'ombra + carica le texture
-      } catch { /* best effort */ }
-      finally { renderer.setRenderTarget(prev); scene.remove(s); }
-    }
-    requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
+  }
+  if (window.__loadTimes) { window.__loadTimes.prewarmRunning = false; window.__loadTimes.prewarmDone = performance.now() - window.__loadTimes.t0; }
 }
 
 window.__game = game; // diagnostica
