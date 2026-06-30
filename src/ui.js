@@ -57,6 +57,15 @@ export class UI {
     this.el.crosshair.style.top = `${y}px`;
   }
 
+  /** Diametro del mirino circolare in px (= proiezione del cono di spread; cresce col rinculo). */
+  crosshairSize(radiusPx) {
+    const d = Math.round(radiusPx * 2);
+    const c = this.el.crosshair;
+    c.style.width = `${d}px`;
+    c.style.height = `${d}px`;
+    c.style.margin = `${-d / 2}px 0 0 ${-d / 2}px`;
+  }
+
   health(hp, maxHp) {
     const f = Math.max(0, hp / maxHp);
     this.el.hpFill.style.width = `${f * 100}%`;

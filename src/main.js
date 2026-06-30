@@ -470,12 +470,103 @@ addEventListener('keydown', (e) => {
   }
 });
 
+// --- DEBUG TEMPORANEO (da rimuovere): K = +100 anime, J = fucile a pompa, L = mitra ---
+addEventListener('keydown', (e) => {
+  if (e.repeat || game.state !== 'playing' || !game.player) return;
+  if (e.code === 'KeyK') { game.souls += 100; ui.souls(game.souls); ui.toast('+100 ANIME'); }
+  else if (e.code === 'KeyJ') game.player.giveWeapon('shotgun');
+  else if (e.code === 'KeyL') game.player.giveWeapon('smg');
+});
+
 // --------------------------------------------------------------- loop ----
 
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const aimPoint = new THREE.Vector3();
+const _projA = new THREE.Vector3(), _projB = new THREE.Vector3(); // proiezione dello spread a schermo
+
+// --- Mirino 3D per la PRIMA PERSONA: invece di un overlay DOM sempre sopra al canvas, vive NELLA
+// scena a distanza fissa davanti alla camera con depthTest attivo → l'ARMA (più vicina) lo OCCLUDE
+// naturalmente: il mirino si vede "dietro" il fucile, non disegnato sopra. In top-down resta il
+// mirino DOM sul cursore. Anello bianco-caldo a bordi morbidi (premium) + punto centrale, billboard
+// (gli sprite guardano sempre la camera). Distanza scelta appena oltre l'arma e prima del mondo. ---
+const CROSS3D_DIST = 2.4; // appena oltre l'arma (che così lo occlude), prima del mondo
+const RING_FRAC = 52 / 64; // raggio dell'anello dentro la texture (per convertire px voluti -> scala sprite)
+function _ringTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d'); const m = 64, rad = 52;
+  // contorno scuro: dà contrasto su qualsiasi fondo SENZA aggiungere luminosità (niente bloom)
+  c.lineWidth = 4; c.strokeStyle = 'rgba(0,0,0,0.5)';
+  c.beginPath(); c.arc(m, m, rad, 0, Math.PI * 2); c.stroke();
+  // anello chiaro SOTTILE e tenue (valore basso → resta sotto la soglia di bloom: soft, non neon)
+  c.lineWidth = 1.5; c.strokeStyle = 'rgba(208,202,192,0.7)';
+  c.beginPath(); c.arc(m, m, rad, 0, Math.PI * 2); c.stroke();
+  return new THREE.CanvasTexture(cv);
+}
+function _dotTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+  const c = cv.getContext('2d');
+  c.lineWidth = 2; c.strokeStyle = 'rgba(0,0,0,0.55)'; // bordino scuro per leggibilità
+  c.beginPath(); c.arc(16, 16, 4.5, 0, Math.PI * 2); c.stroke();
+  c.fillStyle = 'rgba(214,208,198,0.95)';
+  c.beginPath(); c.arc(16, 16, 4.5, 0, Math.PI * 2); c.fill();
+  return new THREE.CanvasTexture(cv);
+}
+const cross3dRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: _ringTexture(), transparent: true, depthTest: true, depthWrite: false, opacity: 0.62 }));
+const cross3dDot = new THREE.Sprite(new THREE.SpriteMaterial({ map: _dotTexture(), transparent: true, depthTest: true, depthWrite: false, opacity: 0.8 }));
+cross3dRing.renderOrder = 20; cross3dDot.renderOrder = 21;
+cross3dRing.visible = cross3dDot.visible = false;
+scene.add(cross3dRing, cross3dDot);
+const _camDir = new THREE.Vector3();
+function _hide3dCross() { cross3dRing.visible = cross3dDot.visible = false; }
+
+// Dimensiona il mirino circolare sulla proiezione REALE del cono di spread (base + rinculo): il
+// cerchio coincide col cono in cui cadono i proiettili → ogni colpo resta DENTRO al mirino (FPS:
+// cono circolare attorno allo sguardo; top-down: ventaglio a terra alla distanza del cursore). Il
+// punto centrale (.dot) resta la mira esatta. GAIN=1 (cerchio = cono); il clamp inferiore tiene un
+// minimo leggibile per le armi precisissime (magnum), quello superiore evita un anello assurdo a
+// rinculo estremo. "Respira" col rinculo. FPS = proiezione angolare; top-down = raggio a terra.
+const CROSS_GAIN = 1.0;
+function updateCrosshairSize() {
+  const p = game.player;
+  if (!p || game.state !== 'playing') { _hide3dCross(); return; }
+  const sp = p.currentSpread(); // rad
+  const fovHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
+  let r;
+  if (game.viewMode === 'fps') {
+    r = (innerHeight / 2) * Math.tan(sp) / Math.tan(fovHalf);
+  } else {
+    const dx = aimPoint.x - p.pos.x, dz = aimPoint.z - p.pos.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const gr = Math.max(0.15, d * Math.tan(sp)); // raggio di dispersione a terra
+    const pxx = dz / d, pzz = -dx / d;            // perpendicolare unitaria in XZ
+    _projA.copy(aimPoint).project(camera);
+    _projB.set(aimPoint.x + pxx * gr, aimPoint.y, aimPoint.z + pzz * gr).project(camera);
+    r = Math.hypot((_projB.x - _projA.x) * innerWidth / 2, (_projB.y - _projA.y) * innerHeight / 2);
+  }
+  const px = THREE.MathUtils.clamp(r * CROSS_GAIN, 5, innerHeight * 0.24); // raggio voluto a schermo
+
+  if (game.viewMode === 'fps') {
+    // mirino 3D davanti alla camera: l'arma (più vicina, depthTest) lo occlude
+    ui.el.crosshair.style.display = 'none'; // niente overlay DOM in prima persona
+    camera.getWorldDirection(_camDir);
+    cross3dRing.position.copy(camera.position).addScaledVector(_camDir, CROSS3D_DIST);
+    cross3dDot.position.copy(cross3dRing.position);
+    // px voluto -> dimensione mondo dello sprite a CROSS3D_DIST. Lo sprite alto S px-mondo proietta
+    // a H·S/(2·D·tan(fov/2)) px; l'anello occupa RING_FRAC del lato → scala per centrare il raggio.
+    const worldPerScreen = (2 * CROSS3D_DIST * Math.tan(fovHalf)) / innerHeight; // mondo per px schermo
+    const ringSize = (2 * px / RING_FRAC) * worldPerScreen; // lato sprite = diametro anello / RING_FRAC
+    cross3dRing.scale.set(ringSize, ringSize, 1);
+    const dotSize = 7 * worldPerScreen; // punto centrale ~7px, dimensione fissa
+    cross3dDot.scale.set(dotSize, dotSize, 1);
+    cross3dRing.visible = cross3dDot.visible = true;
+  } else {
+    ui.el.crosshair.style.display = '';
+    ui.crosshairSize(px);
+    _hide3dCross();
+  }
+}
 const camTarget = new THREE.Vector3();
 const camDesired = new THREE.Vector3();
 const shake = new THREE.Vector3();
@@ -583,6 +674,9 @@ renderer.setAnimationLoop(() => {
       camera.position.add(shake);
       camera.lookAt(camTarget.x + shake.x * 0.5, 0, camTarget.z + shake.z * 0.5);
     }
+    // mirino dimensionato sullo spread, DOPO l'aggiornamento camera: il mirino 3D in prima persona
+    // deve usare posizione/orientamento della camera del frame corrente (niente lag di un frame).
+    updateCrosshairSize();
   } else if (game.world) {
     // anche nei menu la scena vive: nebbia, lucciole, lanterne
     game.world.update(rawDt, t, game.player ? game.player.pos : null);

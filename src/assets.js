@@ -45,11 +45,34 @@ const MANIFEST = {
     skeleton_c: { url: 'assets/models/skeleton_c.glb', yaw: 0, height: 1.8, deferred: true },
   },
   guns: {
-    // Glock-17 realistico skinnato con clip Shoot/Reload/Draw (mani del rig FPS rimosse al mount).
-    pistol: { url: 'assets/models/gun_pistol_glock.glb', length: 0.42 },
-    shotgun: { url: 'assets/models/gun_shotgun.glb', length: 0.85 },
-    smg: { url: 'assets/models/gun_rifle.glb', length: 0.85 },
-    magnum: { url: 'assets/models/gun_rifle.glb', length: 0.85 },
+    // Armi realistiche skinnate con mani guantate + clip Reload/Shoot/Hide/Draw, stessa "serie"
+    // (rig Hand_D/Glove_D) → mani e ricarica coerenti tra le armi. La canna è l'asse più lungo
+    // (auto-allineata a +Z in player._buildGunWrap); `length` = lunghezza in mano (unità mondo).
+    // axis:'z' = canna già lungo +Z (i modelli realistici lo sono tutti); evita l'euristica
+    // "asse più lungo" che sbaglia sulle pistole tozze (Mark 23 più alto che lungo).
+    pistol: { url: 'assets/models/gun_pistol_glock.glb', length: 0.42, axis: 'z' }, // Glock-17 (BarcodeGames, CC-BY)
+    // vmShift: abbassa il viewmodel così l'avambraccio si vede INTERO ma il gomito "tagliato"
+    // (osso aperto) finisce sotto il bordo dello schermo.
+    smg: { url: 'assets/models/gun_smg_kriss.glb', length: 0.62, axis: 'z', vmShift: { y: -0.05, z: -0.04 } }, // KRISS Vector (CC-BY)
+    // Mark 23: pistola → usa le mani guantate + ricarica del Glock (borrowHands); il suo guanto
+    // proprio in viewmodel mostra un avambraccio "tagliato".
+    magnum: {
+      url: 'assets/models/gun_magnum_mk23.glb', length: 0.46, axis: 'z', borrowHands: true,
+      handGrip: { scale: 0.95, z: 0.04, y: 0.0, x: 0.0 },
+    }, // Mark 23 .45 (CC-BY)
+    // Fucile a pompa: viewmodel FPS COMPLETO (braccia+mani+arma in un rig skinnato) con presa a due
+    // mani e ricarica a COLPO SINGOLO (la mano carica i pallettoni uno a uno). "FPS Arms remington
+    // (shotgun)" di Cransh. viewmodel:true → mount dedicato (misura idle, scala, idle in loop).
+    shotgun: {
+      url: 'assets/models/gun_shotgun_cransh.glb', length: 1.2, viewmodel: true,
+      vmAdjust: { x: -0.18, y: 0.08, z: -0.04 },
+      // vmShift: abbassa il viewmodel nel frame camera così la volata/le mani stanno SOTTO il
+      // centro schermo e il mirino (anche ampio) non finisce sull'arma.
+      vmShift: { y: -0.09 },
+      // shootFit: durata dell'animazione di sparo/pompa. Più lunga della pistola così il movimento
+      // del carrello non è compresso/scattoso (il fucile spara lento, c'è tempo).
+      shootFit: 0.5,
+    }, // FPS Arms remington shotgun (Cransh, CC-BY)
   },
   props: {
     gravestone: { url: 'assets/models/gravestone.gltf', height: 1.1 },
@@ -197,7 +220,7 @@ export async function loadAssets(onProgress) {
     jobs.push(track(tryGLB(def.url), 'Armi').then((g) => {
       if (g) {
         g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-        Assets.guns.set(name, { scene: g.scene, length: def.length, animations: g.animations || [] });
+        Assets.guns.set(name, { scene: g.scene, length: def.length, axis: def.axis, flip: def.flip, gloveOnly: def.gloveOnly, borrowHands: def.borrowHands, viewmodel: def.viewmodel, vmAdjust: def.vmAdjust, vmShift: def.vmShift, shootFit: def.shootFit, handGrip: def.handGrip, animations: g.animations || [] });
       }
     }));
   }

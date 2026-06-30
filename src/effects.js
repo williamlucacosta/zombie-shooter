@@ -170,7 +170,9 @@ export class Effects {
 
     // --- traccianti ---
     this.tracers = [];
-    const trGeo = new THREE.BoxGeometry(0.045, 0.045, 1);
+    // cilindro TONDO sottile (open-ended, niente tappi/spigoli) lungo +Z: una scia liscia, non una
+    // "scatola". Sottile e con opacità bassa (vedi tracer()) = lampo di sparo discreto e realistico.
+    const trGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 7, 1, true).rotateX(Math.PI / 2);
     for (let i = 0; i < 40; i++) {
       const m = new THREE.Mesh(trGeo, new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
@@ -498,7 +500,7 @@ export class Effects {
     t.mesh.lookAt(to);
     t.mesh.scale.set(1, 1, Math.max(len, 0.1));
     t.mesh.material.color.set(colorHex);
-    t.mesh.material.opacity = 0.85;
+    t.mesh.material.opacity = 0.4; // discreto, non un lampo accecante
     t.mesh.visible = true;
     t.life = t.maxLife;
   }
@@ -702,7 +704,7 @@ export class Effects {
     for (const t of this.tracers) {
       if (!t.life) continue;
       t.life -= dt;
-      t.mesh.material.opacity = Math.max(0, (t.life / t.maxLife) * 0.85);
+      t.mesh.material.opacity = Math.max(0, (t.life / t.maxLife) * 0.4);
       if (t.life <= 0) { t.life = 0; t.mesh.visible = false; }
     }
     for (const r of this.rings) {

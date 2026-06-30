@@ -15,12 +15,16 @@ export const AUDIO_MANIFEST = {
   zombie_death: ['zombie_death_1.ogg', 'zombie_death_2.ogg', 'zombie_death_3.ogg'],
   boss_roar: ['boss_roar.ogg'],
   shot_pistol: ['shot_pistol.ogg'],
-  shot_shotgun: ['shot_shotgun.ogg'],
+  shot_shotgun: ['shot_shotgun.ogg', 'shot_shotgun_2.ogg', 'shot_shotgun_3.ogg'],
   shot_smg: ['shot_smg.ogg'],
   shot_magnum: ['shot_magnum.ogg'],
   reload_pistol: ['reload_pistol.ogg'],
   reload_rifle: ['reload_rifle.ogg'],
   shotgun_pump: ['shotgun_pump.ogg'],
+  // inserimento del singolo bossolo nel tubo (ricarica a colpo singolo): click meccanico REALE
+  // (BigSoundBank "pistolet, chargement" CC0) rifinito con un filo di corpo grave, 2 varianti
+  // (vedi tools/make-shotgun-shell.mjs). Sostituisce il "pump" ripetuto, prima sintetizzato.
+  shotgun_insert: ['shotgun_insert_1.ogg', 'shotgun_insert_2.ogg'],
   slam: ['slam.ogg'],
   heartbeat: ['heartbeat.ogg'],
   pickup: ['pickup.ogg'],

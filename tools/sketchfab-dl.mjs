@@ -8,18 +8,12 @@ const TOKEN = process.argv[2];
 if (!TOKEN) { console.error('manca il token'); process.exit(1); }
 
 // { name, uid }  — name = file di destinazione in public/assets/models/sf/
+// La Download API restituisce uno ZIP gltf (scene.gltf+bin+textures): va estratto e
+// impacchettato in .glb (vedi tools/sf-shotgun-pack.mjs).
 const MODELS = [
-  // cani / creature per il crawler+hound
-  { name: 'wolf_3dhaupt', uid: 'f3769a474a714ebbbaca0d97f9b0a5a0' },
-  { name: 'quirky_animals', uid: '19e91ef86cd0448f9cbb5d6c538dade2' },
-  // fucili a pompa realistici
-  { name: 'shotgun_opposite', uid: '71d8d3406932463295434ab274c8f4ee' },
-  { name: 'shotgun_classic', uid: 'defe928d8f9747fe912794b8ee3e8aa7' },
-  { name: 'shotgun_gameready', uid: '86a738c74f694d77813cd67b3ecdb6d3' },
-  // mani / braccia FPS realistiche
-  { name: 'fps_arms_djmaesen', uid: 'e3c42c05b22944e5839deb8e003f0987' },
-  { name: 'fps_hands_cransh', uid: '5f2d0ed780a94724b36ab505f7564057' },
-  { name: 'fps_hands_fischer', uid: '547a45535f0c4fe787948f7a7a6a88db' },
+  // --- FUCILE A POMPA: viewmodel FPS animato (braccia+mani+arma, ricarica a colpo singolo) ---
+  // "FPS Arms remington (shotgun)" di Cransh (CC-BY): è quello effettivamente usato nel gioco.
+  { name: 'sg_cransh_remington', uid: 'e68ef617fe8a48cca8610d016ffd5881' }, // by "Cransh"
 ];
 const OUT = 'public/assets/models/sf';
 

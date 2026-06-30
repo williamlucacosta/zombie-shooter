@@ -198,13 +198,11 @@
     #pickup-toast { position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%); font-size: 17px; letter-spacing: .25em;
                     color: var(--toxic); text-shadow: 0 0 12px rgba(138,255,90,.5); opacity: 0; transition: opacity .3s; }
 
-    /* crosshair */
-    #crosshair { position: fixed; width: 26px; height: 26px; margin: -13px 0 0 -13px; pointer-events: none; z-index: 30; opacity: 0; }
+    /* crosshair circolare: anello sottile + punto centrale, stile "premium" discreto (soft, poco
+       invadente). Un filo di drop-shadow scuro lo rende leggibile anche sui fondi chiari. */
+    #crosshair { position: fixed; width: 24px; height: 24px; margin: -12px 0 0 -12px; pointer-events: none; z-index: 30; opacity: 0; box-sizing: border-box; border: 1px solid rgba(255,244,232,.34); border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,.4); transition: opacity .25s; }
     #crosshair.visible { opacity: 1; }
-    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,235,210,.9); box-shadow: 0 0 6px rgba(255,120,60,.8); }
-    #crosshair::before { left: 12px; top: 0; width: 2px; height: 26px; }
-    #crosshair::after { top: 12px; left: 0; width: 26px; height: 2px; }
-    #crosshair .dot { position: absolute; left: 11px; top: 11px; width: 4px; height: 4px; border-radius: 50%; background: var(--blood); }
+    #crosshair .dot { position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; margin: -1px 0 0 -1px; border-radius: 50%; background: rgba(255,246,236,.78); box-shadow: 0 0 2px rgba(0,0,0,.55); }
 
     /* full-screen feedback */
     #damage-flash { position: fixed; inset: 0; pointer-events: none; z-index: 25; opacity: 0;

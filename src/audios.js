@@ -26,6 +26,7 @@ const LABELS = {
   reload_pistol: 'Ricarica — Pistola',
   reload_rifle: 'Ricarica — Mitra / Magnum',
   shotgun_pump: 'Pompa — Fucile a pompa',
+  shotgun_insert: 'Inserimento bossolo — Fucile a pompa',
   step: 'Passo del giocatore',
   zombie_growl: 'Ringhio zombi',
   zombie_attack: 'Attacco zombi',
@@ -60,7 +61,7 @@ const LOOPING = new Set(['rain_loop', 'music_ambient']);
 // Organizzazione in gruppi (chiavi del manifest, tutte file-backed).
 const FILE_GROUPS = [
   { title: 'Armi — spari', keys: ['shot_pistol', 'shot_shotgun', 'shot_smg', 'shot_magnum'] },
-  { title: 'Armi — ricariche', hint: 'Registrazioni reali CC0, corte.', keys: ['reload_pistol', 'reload_rifle', 'shotgun_pump'] },
+  { title: 'Armi — ricariche', hint: 'Registrazioni reali CC0, corte.', keys: ['reload_pistol', 'reload_rifle', 'shotgun_pump', 'shotgun_insert'] },
   { title: 'Movimento', hint: 'Rimosso footstep_2; footstep_3 ammorbidito.', keys: ['step'] },
   { title: 'Zombi & boss', keys: ['zombie_growl', 'zombie_attack', 'zombie_death', 'boss_roar', 'slam'] },
   { title: 'Combattimento', hint: 'Impatti/foley reali CC0 (prima sintetizzati).', keys: ['zombie_hit', 'hit_flesh', 'crit', 'splat', 'spit', 'dash'] },

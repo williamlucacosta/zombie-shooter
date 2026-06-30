@@ -100,24 +100,32 @@ export function setDifficulty(key) {
 
 export const WEAPONS = {
   // tracer/light: toni caldi reali (ottone incandescente / bianco-caldo), non plasma colorato.
+  // spread = cono di precisione base (gradi); bloom = gradi aggiunti a ogni colpo (rinculo) che
+  // poi rientrano: il mirino circolare è dimensionato sullo spread EFFETTIVO (base+bloom) e i
+  // proiettili partono in quel cono → cadono sempre dentro al cerchio.
   pistol: {
     id: 'pistol', slot: 1, name: 'PISTOLA', dmg: 14, rof: 0.21, mag: 12, reload: 1.0,
-    spread: 1.6, speed: 96, pellets: 1, pierce: 0, reserve: Infinity, auto: false,
+    spread: 1.1, bloom: 1.2, speed: 96, pellets: 1, pierce: 0, reserve: Infinity, auto: false,
     knock: 1.6, tracer: 0xffd49a, shake: 0.07, light: 0xfff0c8,
   },
   shotgun: {
-    id: 'shotgun', slot: 2, name: 'FUCILE A POMPA', dmg: 9, rof: 0.85, mag: 6, reload: 2.0,
-    spread: 8.5, speed: 70, pellets: 7, pierce: 0, reserve: 30, maxReserve: 48, auto: false,
+    id: 'shotgun', slot: 2, name: 'FUCILE A POMPA', dmg: 9, rof: 0.85, mag: 6, reload: 3.4,
+    spread: 5.2, bloom: 2.2, speed: 70, pellets: 7, pierce: 0, reserve: 30, maxReserve: 48, auto: false,
     knock: 5.0, tracer: 0xffc079, shake: 0.24, light: 0xffd29a,
+    // ricarica a COLPO SINGOLO: un bossolo ogni shellTime secondi (+1 in canna), interrompibile
+    // sparando (tieni quelli già caricati). Vedi player.startReload / _endShellReload. shellTime alto
+    // (cadenza lenta) perché la clip di ricarica (6.8s, ~6 inserimenti) non venga compressa troppo:
+    // a 0.7s i 6 bossoli (mag*shellTime≈4.2s, clip ~1.6×) sono TUTTI visibili e i click distinti.
+    shellReload: true, shellTime: 0.7,
   },
   smg: {
     id: 'smg', slot: 3, name: 'MITRA', dmg: 8, rof: 0.082, mag: 34, reload: 1.6,
-    spread: 4.2, speed: 104, pellets: 1, pierce: 0, reserve: 160, maxReserve: 260, auto: true,
+    spread: 2.6, bloom: 0.9, speed: 104, pellets: 1, pierce: 0, reserve: 160, maxReserve: 260, auto: true,
     knock: 1.0, tracer: 0xffe0a4, shake: 0.05, light: 0xfff0cc,
   },
   magnum: {
     id: 'magnum', slot: 4, name: 'MAGNUM', dmg: 65, rof: 0.7, mag: 5, reload: 1.9,
-    spread: 0.5, speed: 120, pellets: 1, pierce: 3, reserve: 20, maxReserve: 35, auto: false,
+    spread: 0.45, bloom: 3.2, speed: 120, pellets: 1, pierce: 3, reserve: 20, maxReserve: 35, auto: false,
     knock: 7.0, tracer: 0xfff1cc, shake: 0.2, light: 0xffe6c0,
   },
 };

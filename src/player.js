@@ -11,11 +11,35 @@ import { resolveCollisions } from './enemies.js';
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _zAxis = new THREE.Vector3(0, 0, 1); // asse di riferimento per orientare i proiettili
+const _xAxis = new THREE.Vector3(1, 0, 0); // fallback per la base quando si guarda quasi a piombo
+const _bR = new THREE.Vector3(); // basi perpendicolari per il cono di spread 2D (FPS)
+const _bU = new THREE.Vector3();
+const _bDir = new THREE.Vector3();
+
+// Texture morbida (gradiente radiale) per la "testa" luminosa del tracciante: alone soffuso,
+// non un bordo netto. Creata una sola volta e condivisa tra tutti i proiettili.
+let _softTex = null;
+function softDotTexture() {
+  if (_softTex) return _softTex;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const c = cv.getContext('2d');
+  const grad = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.3, 'rgba(255,255,255,0.7)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = grad; c.fillRect(0, 0, 64, 64);
+  _softTex = new THREE.CanvasTexture(cv);
+  return _softTex;
+}
 // base ortonormale dello sguardo per il viewmodel FPS
 const _vF = new THREE.Vector3();
 const _vR = new THREE.Vector3();
 const _vU = new THREE.Vector3();
 const _vUp = new THREE.Vector3(0, 1, 0);
+const _cTarget = new THREE.Vector3(); // convergenza viewmodel: punto di mira sul raggio di vista
+const _cF = new THREE.Vector3();
+const _cR = new THREE.Vector3();
+const _cU = new THREE.Vector3();
 
 // Trova un osso per nome (regex), qualunque sia il rig (Quaternius "Middle1.R" o Mixamo
 // "mixamorig:RightHandMiddle1", con eventuale suffisso "_NNN").
@@ -43,7 +67,7 @@ const MAX_ARM_IN = 0.78;   // ~45° verso il petto (lato opposto)
 const MAX_HEAD = 1.25;     // ~72° collo, simmetrico
 
 // Campione di ricarica per arma (registrazioni reali CC0, corte).
-const RELOAD_SOUNDS = { pistol: 'reload_pistol', shotgun: 'shotgun_pump', smg: 'reload_rifle', magnum: 'reload_rifle' };
+const RELOAD_SOUNDS = { pistol: 'reload_pistol', shotgun: 'shotgun_pump', smg: 'reload_rifle', magnum: 'reload_pistol' };
 
 // Calibrazione dell'aggancio dell'arma alla mano. Anchor nel palmo (frazione polso->nocca)
 // + offset fini nella base dell'arma (x=lato, y=su, z=avanti). lateralSign/upSign correggono
@@ -73,9 +97,12 @@ export class Player {
     this._stepHalf = -1; // metà del ciclo di camminata (per passi sincronizzati ai piedi)
     this.bullets = [];
     this._bulletMats = new Map();
-    // sfera sottile spostata in avanti (z>=0): stirata diventa una scia che parte DALL'origine
-    // (la bocca) ed esce in avanti, invece di estendersi anche dietro la canna.
-    this._bulletGeo = new THREE.SphereGeometry(0.05, 6, 4).translate(0, 0, 0.05);
+    this._bloom = 0; // rinculo accumulato (rad di spread extra), rientra nel tempo
+    // tracciante: capsula SOTTILE liscia (estremi arrotondati, niente "parallelepipedo") che TRAILA
+    // dietro la testa luminosa (z<=0) come una vera scia di tracciante: dardo discreto e affusolato,
+    // non una barra. Additiva ma tenue (vedi opacity in _fire). Più segmenti = curva pulita da vicino.
+    this._bulletGeo = new THREE.CapsuleGeometry(0.02, 0.34, 4, 10).rotateX(Math.PI / 2).translate(0, 0, -0.19);
+    this._bulletHaloMats = new Map(); // materiali sprite alone per colore (testa luminosa morbida)
     this._dashGhosts = []; // scia-fantasma del corpo durante lo scatto
     this._ghostT = 0;
 
@@ -150,7 +177,8 @@ export class Player {
     // --- viewmodel prima persona: l'arma (con le mani guantate del rig) agganciata alla
     // camera, come in un vero FPS. Segue lo sguardo (yaw+pitch) con sway, bob e rinculo. ---
     this._fps = false;
-    this._vmRecoil = 0;            // 0..1, scatta a ogni colpo e decade
+    this._vmRecoil = 0;            // posizione del rinculo (molla): kick morbido + assestamento
+    this._vmRecoilVel = 0;        // velocità della molla del rinculo (vedi _updateViewmodel)
     this._vmSwayX = 0; this._vmSwayY = 0; // l'arma insegue il mouse-look con ritardo
     this._vmBobT = 0;             // fase dell'ondeggio del passo
     this._vmBasis = new THREE.Matrix4();
@@ -173,53 +201,110 @@ export class Player {
   get weaponDef() { return WEAPONS[this.current]; }
   get ammo() { return this.weapons[this.current]; }
 
+  /**
+   * Costruisce il viewmodel di un'arma: la ruota (canna lungo +Z), la scala e la ricentra
+   * sull'impugnatura. `handsOnly` nasconde le parti dell'arma e tiene solo le mani/guanti del rig
+   * (per "prestare" le mani guantate del glock alle armi che non ne hanno). Ritorna {wrap, gun, hands}.
+   */
+  _buildGunWrap(entry, handsOnly = false) {
+    const animated = entry.animations && entry.animations.length > 0;
+    // skeletonClone preserva lo scheletro per l'animazione delle parti (carrello/caricatore/mani)
+    const gun = animated ? skeletonClone(entry.scene) : entry.scene.clone();
+    const hands = [];
+    const gunBox = new THREE.Box3();
+    gun.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.frustumCulled = false;
+      if (/hand|glove/i.test(o.name)) {
+        // pelle nuda dell'avambraccio: con gloveOnly la nascondo (tengo solo il guanto, che
+        // copre mano+polso) → niente avambraccio "tagliato" a vista (l'osso aperto del gomito).
+        if (entry.gloveOnly && !/glove/i.test(o.name)) { o.visible = false; return; }
+        hands.push(o); return;
+      }
+      o.updateWorldMatrix(true, false);
+      gunBox.expandByObject(o);
+    });
+    if (handsOnly) { // mani in prestito: nascondi tutte le parti dell'arma, tieni solo le mani
+      gun.traverse((o) => { if (o.isMesh && !/hand|glove/i.test(o.name)) o.visible = false; });
+    }
+    const size = gunBox.getSize(_v1);
+    // orientazione canna: usa l'hint esplicito entry.axis se presente, sennò l'asse più lungo
+    // (euristica fragile su pistole tozze: il Mark 23 è più ALTO che lungo → andrebbe ruotato a
+    // sproposito; per questo i modelli realistici dichiarano axis:'z', canna già lungo +Z).
+    const axis = entry.axis
+      || (size.x >= size.y && size.x >= size.z ? 'x' : (size.y >= size.x && size.y >= size.z ? 'y' : 'z'));
+    if (axis === 'x') gun.rotation.y = -Math.PI / 2;
+    else if (axis === 'y') gun.rotation.x = Math.PI / 2;
+    // 'z' = nessuna rotazione (canna già allineata a +Z)
+    if (entry.flip) gun.rotateY(Math.PI); // modello con la canna verso -Z → girala a +Z
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    gun.scale.setScalar(entry.length / maxDim);
+    const wrap = new THREE.Group();
+    wrap.add(gun);
+    // ricentra sulla sola arma (escluse le mani), poi spingi avanti sull'impugnatura
+    gun.updateWorldMatrix(true, true);
+    const gb2 = new THREE.Box3();
+    gun.traverse((o) => { if (o.isMesh && !/hand|glove/i.test(o.name)) gb2.expandByObject(o); });
+    gun.position.sub(gb2.getCenter(_v2));
+    gun.position.z += entry.length * 0.42;
+    return { wrap, gun, hands, animated, maxDim };
+  }
+
   _mountGun(id) {
     this._gunMixer = null; this._gunClips = null; this._gunShoot = null; this._gunReload = null; this._gunHands = null;
+    this._gunIdle = null; this._gunShootFit = 0.13; this._gunCurAction = null;
     while (this.gunMount.children.length) this.gunMount.remove(this.gunMount.children[0]);
     const def = WEAPONS[id];
     const entry = Assets.guns.get(id);
-    // gun ruotato così che la canna guardi +Z (avanti), poi ricentrato sull'impugnatura
+    this._vmShift = (entry && entry.vmShift) || null;
+    // viewmodel FPS completo (braccia+arma in un unico rig, es. il fucile a pompa animato):
+    // gestione dedicata (misura, scala, idle in loop, ricarica a colpo singolo).
+    if (entry && entry.viewmodel) { this._mountViewmodel(entry); return; }
     if (entry) {
-      const animated = entry.animations && entry.animations.length > 0;
-      // skeletonClone preserva lo scheletro per l'animazione delle parti (carrello/caricatore)
-      const gun = animated ? skeletonClone(entry.scene) : entry.scene.clone();
-      // separa l'arma dalle mani/guanti del rig FPS: le mani fanno da VIEWMODEL in prima
-      // persona (visibili solo in FPS); in top-down restano nascoste e si usa il braccio del soldato.
-      const hands = [];
-      const gunBox = new THREE.Box3();
-      gun.traverse((o) => {
-        if (!o.isMesh) return;
-        o.castShadow = true; o.frustumCulled = false;
-        if (/hand|glove/i.test(o.name)) { hands.push(o); return; }
-        o.updateWorldMatrix(true, false);
-        gunBox.expandByObject(o);
-      });
-      this._gunHands = hands;
-      const size = gunBox.getSize(_v1);
-      // l'asse più lungo dell'arma è la canna: portalo lungo +Z
-      if (size.x >= size.y && size.x >= size.z) gun.rotation.y = -Math.PI / 2;
-      else if (size.y >= size.x && size.y >= size.z) gun.rotation.x = Math.PI / 2;
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      gun.scale.setScalar(entry.length / maxDim);
-      const wrap = new THREE.Group();
-      wrap.add(gun);
-      // ricentra sulla sola arma (escluse le mani), poi spingi avanti sull'impugnatura
-      gun.updateWorldMatrix(true, true);
-      const gb2 = new THREE.Box3();
-      gun.traverse((o) => { if (o.isMesh && !/hand|glove/i.test(o.name)) gb2.expandByObject(o); });
-      gun.position.sub(gb2.getCenter(_v2));
-      gun.position.z += entry.length * 0.42;
+      const built = this._buildGunWrap(entry);
+      const { wrap, gun, hands, animated } = built;
+      // le mani fanno da VIEWMODEL in prima persona (visibili solo in FPS); in top-down restano
+      // nascoste e si usa il braccio del soldato.
       this.gunMount.add(wrap);
-      for (const h of hands) h.visible = !!this._fps; // mani visibili solo in FPS
-      if (animated) {
-        this._gunMixer = new THREE.AnimationMixer(gun);
-        this._gunClips = entry.animations;
-        const shoot = entry.animations.find((c) => /shoot/i.test(c.name));
-        const reload = entry.animations.find((c) => /reload/i.test(c.name));
-        // la clip Shoot del glock dura ~3.6s ma il carrello arretra solo a t≈3.3-3.55s:
-        // ne estraggo quella finestra come breve animazione di sparo (frame 98..109 @30fps).
-        this._gunShoot = shoot ? THREE.AnimationUtils.subclip(shoot.clone(), 'shoot', 98, 109, 30) : null;
-        this._gunReload = reload || null;
+      this._gunHands = hands;
+      // sorgente di animazione: l'arma stessa se ha mani+clip (Glock/KRISS/Mark23); altrimenti
+      // (Remington 870, statico) prendo in prestito le mani guantate ANIMATE del Glock.
+      let animRoot = animated ? gun : null;
+      let clips = animated ? entry.animations : null;
+      // mani in prestito dal Glock: armi senza mani proprie (870 statico) OPPURE che le delegano
+      // (Mark 23: è una pistola → le mani guantate pulite + la ricarica del Glock calzano perfette,
+      // mentre il suo guanto proprio in viewmodel mostra un brutto "taglio").
+      if (hands.length === 0 || entry.borrowHands) {
+        if (entry.borrowHands) for (const h of hands) h.visible = false; // via le mani proprie
+        const donor = Assets.guns.get('pistol'); // il Glock porta mani + clip Reload/Shoot
+        if (donor && donor.animations && donor.animations.length) {
+          const hb = this._buildGunWrap(donor, true); // solo mani guantate (arma nascosta)
+          // _buildGunWrap rende già le mani alla dimensione-mondo giusta (il glock è scalato a
+          // donor.length=0.42 a prescindere dall'arma): basta un ritocco di scala + posizione
+          // per posarle sull'impugnatura del fucile (valori in `hb` = entry.handGrip).
+          const g = entry.handGrip || {};
+          hb.wrap.scale.multiplyScalar(g.scale ?? 0.85);
+          hb.wrap.position.z += g.z ?? 0.0;
+          hb.wrap.position.y += g.y ?? 0.0;
+          hb.wrap.position.x += g.x ?? 0.0;
+          this._borrowedHandsWrap = hb.wrap; // per la calibrazione live
+          this.gunMount.add(hb.wrap);
+          this._gunHands = hb.hands;
+          animRoot = hb.gun;        // il rig delle mani in prestito guida la ricarica
+          clips = donor.animations;
+        }
+      }
+      for (const h of this._gunHands) h.visible = !!this._fps; // mani visibili solo in FPS
+      if (animRoot && clips) {
+        this._gunMixer = new THREE.AnimationMixer(animRoot);
+        this._gunClips = clips;
+        const shoot = clips.find((c) => /shoot|fire/i.test(c.name));
+        const reload = clips.find((c) => /reload/i.test(c.name));
+        // le clip "serie BarcodeGames" stanno su una timeline condivisa: ogni clip ha keyframe
+        // solo nella propria finestra (es. Shoot del glock ai frame ~98-109). Estraggo la
+        // finestra reale di ciascuna (min..max) e la ribaso a 0 → vale per ogni arma.
+        this._gunShoot = shoot ? this._trimClip(shoot, 'shoot') : null;
+        this._gunReload = reload ? this._trimClip(reload, 'reload') : null;
       }
     } else {
       const gun = makeRifle();
@@ -228,6 +313,98 @@ export class Player {
       this.gunMount.add(gun);
     }
     this._computeMuzzleLocal();
+  }
+
+  /**
+   * Monta un VIEWMODEL FPS completo (braccia+mani+arma in un solo rig skinnato), es. il fucile a
+   * pompa con ricarica a colpo singolo. Misura la geometria in posa idle (la bind-pose di questi
+   * rig è "esplosa" e inutilizzabile), scala la canna a entry.length, classifica canna vs braccia,
+   * calcola la bocca e fa girare l'idle in loop. La ricarica/sparo interrompono e poi tornano a idle.
+   */
+  _mountViewmodel(entry) {
+    const model = skeletonClone(entry.scene);
+    model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    const clips = entry.animations || [];
+    const idle = clips.find((c) => /idle|watch/i.test(c.name)) || clips[0];
+    const mixer = new THREE.AnimationMixer(model);
+    // posa idle per misurare la geometria SKINNATA (computeBoundingBox usa i vertici deformati)
+    if (idle) { mixer.clipAction(idle).play(); mixer.update(0.3); }
+    model.updateMatrixWorld(true);
+    const metas = [];
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      const box = new THREE.Box3();
+      if (o.isSkinnedMesh) { o.computeBoundingBox(); box.copy(o.boundingBox); }
+      else { o.geometry.computeBoundingBox(); box.copy(o.geometry.boundingBox); }
+      box.applyMatrix4(o.matrixWorld);
+      metas.push({ o, box, sz: box.getSize(new THREE.Vector3()) });
+    });
+    // canna = mesh con la max estensione in Z (più lunga in avanti); braccia = mesh "larghe" in X;
+    // il resto (bossolo/dettagli) resta con la canna (sempre visibile).
+    let gunMeta = metas[0];
+    for (const m of metas) if (m.sz.z > gunMeta.sz.z) gunMeta = m;
+    // braccia = mesh nettamente più LARGHE della canna (la canna è sottile); il bossolo/dettagli
+    // (mesh strette o minuscole) restano con la canna e restano sempre visibili.
+    const arms = [];
+    for (const m of metas) if (m !== gunMeta && m.sz.x > Math.max(0.2, gunMeta.sz.x * 1.6)) arms.push(m.o);
+    // scala: lunghezza canna -> entry.length; il viewmodel non va riorientato (canna già +Z).
+    const scale = entry.length / Math.max(gunMeta.sz.z, 0.01);
+    const wrap = new THREE.Group();
+    wrap.add(model);
+    wrap.scale.setScalar(scale);
+    const gc = gunMeta.box.getCenter(_v2);
+    const adj = entry.vmAdjust || {};
+    wrap.position.set(
+      -gc.x * scale + (adj.x || 0),
+      -gc.y * scale + (adj.y || 0),
+      -gc.z * scale + entry.length * 0.05 + (adj.z || 0),
+    );
+    this.gunMount.add(wrap);
+    this._vmWrap = wrap; // per la calibrazione live
+    // bocca della canna = centro-fronte (max z) della mesh canna, in coordinate gunMount
+    this._muzzleLocal.set(
+      (gunMeta.box.min.x + gunMeta.box.max.x) / 2,
+      (gunMeta.box.min.y + gunMeta.box.max.y) / 2,
+      gunMeta.box.max.z,
+    ).multiplyScalar(scale).add(wrap.position);
+    // braccia = "mani" (visibili solo in FPS; in top-down resta l'arma sul braccio del soldato)
+    this._gunHands = arms;
+    for (const h of arms) h.visible = !!this._fps;
+    // animazioni: idle in loop; sparo/ricarica una volta poi ritorno a idle
+    this._gunMixer = mixer;
+    this._gunClips = clips;
+    this._gunIdle = idle;
+    this._gunShoot = clips.find((c) => /shot|fire|shoot/i.test(c.name)) || null;
+    this._gunReload = clips.find((c) => /reload/i.test(c.name)) || null;
+    this._gunShootFit = entry.shootFit || 0.4;
+    mixer.addEventListener('finished', () => this._playIdle());
+    this._playIdle();
+  }
+
+  /**
+   * Torna all'idle in loop del viewmodel con una DISSOLVENZA dall'animazione corrente (sparo/
+   * ricarica), così la fine ricarica non "scatta" bruscamente ma riabbassa l'arma in modo fluido.
+   */
+  _playIdle() {
+    if (!this._gunMixer || !this._gunIdle) return;
+    const idle = this._gunMixer.clipAction(this._gunIdle);
+    const prev = this._gunCurAction;
+    idle.reset(); idle.setLoop(THREE.LoopRepeat, Infinity); idle.enabled = true; idle.play();
+    if (prev && prev !== idle && prev.isRunning()) prev.crossFadeTo(idle, 0.35, false); // dissolvenza morbida
+    else idle.setEffectiveWeight(1);
+    this._gunCurAction = idle;
+  }
+
+  /** Ritaglia una clip alla finestra reale dei suoi keyframe (min..max @30fps) e la ribasa a 0. */
+  _trimClip(clip, name) {
+    let mn = Infinity, mx = 0;
+    for (const t of clip.tracks) {
+      if (!t.times.length) continue;
+      mn = Math.min(mn, t.times[0]);
+      mx = Math.max(mx, t.times[t.times.length - 1]);
+    }
+    if (!isFinite(mn)) return clip.clone();
+    return THREE.AnimationUtils.subclip(clip.clone(), name, Math.floor(mn * 30), Math.ceil(mx * 30) + 1, 30);
   }
 
   /**
@@ -243,7 +420,8 @@ export class Player {
     // escludi mani/guanti E il caricatore (che pende sotto): la bocca sta in alto sulla canna,
     // non al centro verticale dell'intera arma.
     this.gunMount.traverse((o) => {
-      if (!o.isMesh || /hand|glove|mag/i.test(o.name) || !o.geometry) return;
+      // escludi mani/caricatore E le mesh nascoste (le parti del glock "in prestito" per le mani)
+      if (!o.isMesh || !o.visible || /hand|glove|mag/i.test(o.name) || !o.geometry) return;
       const g = o.geometry;
       if (!g.boundingBox) g.computeBoundingBox();
       const bb = g.boundingBox;
@@ -262,12 +440,15 @@ export class Player {
   /** Riproduce una clip dell'arma (sparo/ricarica) una volta, adattata al tempo voluto. */
   _playGunAnim(clip, fitTime) {
     if (!this._gunMixer || !clip) return;
+    this._gunMixer.stopAllAction(); // niente blending tra sparo e ricarica sullo stesso rig
     const a = this._gunMixer.clipAction(clip);
-    a.stop(); a.reset();
+    a.reset();
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
     a.timeScale = clip.duration / Math.max(fitTime, 0.05);
+    a.setEffectiveWeight(1);
     a.play();
+    this._gunCurAction = a; // per la dissolvenza verso l'idle (vedi _playIdle)
   }
 
   /**
@@ -346,8 +527,18 @@ export class Player {
       bobY = Math.sin(this._vmBobT) * 0.004; // respiro a riposo
     }
 
-    // rinculo: scatta indietro e su, poi decade
-    this._vmRecoil = Math.max(0, this._vmRecoil - dt * 7);
+    // rinculo come MOLLA smorzata: il colpo dà un IMPULSO alla velocità (_fire), qui la molla
+    // riporta dolcemente a 0 con un piccolo overshoot → kick fluido e assestamento "professionale",
+    // niente più scatto istantaneo. Integrata a SUB-STEP fissi (~8ms) così è identica e stabile a
+    // qualunque framerate (anche a dt alto / cali di fps). K=rigidità, C=smorzamento (ζ≈0.74: vivo).
+    {
+      const K = 260, C = 24;
+      const steps = Math.max(1, Math.ceil(dt / 0.008)), h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        this._vmRecoilVel += (-K * this._vmRecoil - C * this._vmRecoilVel) * h;
+        this._vmRecoil += this._vmRecoilVel * h;
+      }
+    }
     const rec = this._vmRecoil;
 
     // posizione: occhio (altezza camera) + offset lungo la base dello sguardo
@@ -356,12 +547,24 @@ export class Player {
       .addScaledVector(R, vm.x + this._vmSwayX + bobX)
       .addScaledVector(U, vm.y + this._vmSwayY + bobY + rec * 0.03)
       .addScaledVector(F, vm.fwd - rec * 0.10);
+    // spostamento per-arma nel frame della camera (es. abbassa il KRISS così il gomito "tagliato"
+    // del braccio finisce sotto il bordo dello schermo).
+    const sh = this._vmShift;
+    if (sh) _v1.addScaledVector(R, sh.x || 0).addScaledVector(U, sh.y || 0).addScaledVector(F, sh.z || 0);
     this.gunMount.position.set(this.pos.x + _v1.x, eyeY + _v1.y, this.pos.z + _v1.z);
 
-    // orientamento: canna (+Z locale) lungo F; poi calcio (muzzle su) e sway
-    this._vmBasis.makeBasis(R, U, F);
+    // orientamento con CONVERGENZA sul mirino: la canna (+Z locale) non resta parallela allo
+    // sguardo (e quindi spostata di lato), ma punta verso un punto sul RAGGIO DI VISTA (occhio +
+    // F*dist). Quel punto si proietta esattamente sul mirino, quindi la volata "guarda" il mirino
+    // per tutte le armi. (I proiettili partono comunque lungo F, vedi _fwd.)
+    const aimDist = 30;
+    _cTarget.set(this.pos.x + F.x * aimDist, eyeY + F.y * aimDist, this.pos.z + F.z * aimDist);
+    const cF = _cF.subVectors(_cTarget, this.gunMount.position).normalize();
+    const cR = _cR.crossVectors(_vUp, cF).normalize();
+    const cU = _cU.crossVectors(cF, cR).normalize();
+    this._vmBasis.makeBasis(cR, cU, cF);
     this.gunMount.quaternion.setFromRotationMatrix(this._vmBasis);
-    this.gunMount.rotateX(-(vm.pitch + rec * vm.recoilRot)); // muzzle leggermente in su
+    this.gunMount.rotateX(-(rec * vm.recoilRot)); // solo rinculo (la convergenza alza già la volata)
     this.gunMount.rotateY(-this._vmSwayX * 0.6);
 
     // bocca REALE dell'arma (dalla geometria) in coordinate mondo: origine di proiettili e lampo
@@ -468,6 +671,7 @@ export class Player {
     if (!this.weapons[id] || this.current === id || this.dead) return;
     this.current = id;
     this.reloadT = 0;
+    this._shellReloading = false; // annulla un'eventuale ricarica a colpo singolo in corso
     this.fireTimer = Math.max(this.fireTimer, 0.12);
     this._mountGun(id);
     Audio.play('click', { vol: 0.6 });
@@ -478,11 +682,29 @@ export class Player {
   startReload() {
     const def = this.weaponDef;
     const w = this.ammo;
-    if (this.reloadT > 0 || w.mag >= def.mag || w.reserve <= 0 || this.dead) return;
+    if (this.reloadT > 0 || this._shellReloading || w.mag >= def.mag || w.reserve <= 0 || this.dead) return;
+    // ricarica a COLPO SINGOLO (fucile a pompa): carica un bossolo alla volta, interrompibile.
+    if (def.shellReload) {
+      this._shellReloading = true;
+      this._shellTimer = def.shellTime; // primo bossolo dopo un tempo (il fucile si alza)
+      // l'intera clip di caricamento scorre nel tempo di un caricatore pieno → pacing naturale
+      this._playGunAnim(this._gunReload, def.mag * def.shellTime);
+      Audio.play('shotgun_pump', { vol: 0.55, pitchVar: 0.05 });
+      this.game.ui.reloading(true);
+      return;
+    }
     this.reloadT = def.reload;
     Audio.play(RELOAD_SOUNDS[this.current] || 'reload_pistol', { vol: 0.85, pitchVar: 0.04 });
     this._playGunAnim(this._gunReload, def.reload); // ricarica (caricatore), scalata sul tempo arma
     this.game.ui.reloading(true);
+  }
+
+  /** Termina la ricarica a colpo singolo (mag pieno / riserva finita / annullata sparando). */
+  _endShellReload() {
+    if (!this._shellReloading) return;
+    this._shellReloading = false;
+    this.game.ui.reloading(false);
+    this._playIdle(); // torna alla posa di pronti (il viewmodel ha l'idle in loop)
   }
 
   takeDamage(dmg, fromPos) {
@@ -512,6 +734,7 @@ export class Player {
     if (this.dead) { this.gunMount.visible = false; this._updateBullets(dt, enemies); return; }
 
     this.iframes = Math.max(0, this.iframes - dt);
+    this._bloom = THREE.MathUtils.damp(this._bloom, 0, 7, dt); // il rinculo rientra (cerchio che torna)
 
     // ---- mira ---- (la canna punta sempre verso il cursore; il corpo si orienta dopo,
     // verso la mira se fermo o verso la direzione di marcia se cammina)
@@ -648,6 +871,20 @@ export class Player {
         g.ui.reloading(false);
         g.ui.ammo(this);
       }
+    } else if (this._shellReloading) {
+      // un bossolo alla volta: ogni inserimento aumenta di 1 in canna fino al massimo
+      this._shellTimer -= dt;
+      if (this._shellTimer <= 0) {
+        const def = this.weaponDef, w = this.ammo;
+        if (w.mag < def.mag && w.reserve > 0) {
+          w.mag++;
+          if (w.reserve !== Infinity) w.reserve--;
+          Audio.play('shotgun_insert', { vol: 0.6, pitchVar: 0.06, volVar: 0.08 });
+          g.ui.ammo(this);
+        }
+        if (w.mag >= def.mag || w.reserve <= 0) this._endShellReload(); // pieno → fine
+        else this._shellTimer = def.shellTime; // prossimo bossolo
+      }
     }
 
     // ---- cambio arma ----
@@ -665,17 +902,29 @@ export class Player {
     this.fireTimer -= dt;
     const def = this.weaponDef;
     const wantFire = def.auto ? input.mouseDown : input.mousePressed;
-    if (wantFire && this.fireTimer <= 0 && this.reloadT <= 0) {
-      if (this.ammo.mag <= 0) {
-        Audio.play('click', { vol: 0.7 });
-        this.fireTimer = 0.25;
-        this.startReload();
-      } else {
-        this._fire(def);
+    if (wantFire && this.fireTimer <= 0) {
+      if (this._shellReloading) {
+        // sparare ANNULLA la ricarica a colpo singolo: tieni i bossoli già caricati e spara
+        if (this.ammo.mag > 0) { this._endShellReload(); this._fire(def); }
+        // se non c'è ancora nessun colpo in canna, ignora (continua a caricare)
+      } else if (this.reloadT <= 0) {
+        if (this.ammo.mag <= 0) {
+          Audio.play('click', { vol: 0.7 });
+          this.fireTimer = 0.25;
+          this.startReload();
+        } else {
+          this._fire(def);
+        }
       }
     }
 
     this._updateBullets(dt, enemies);
+  }
+
+  /** Spread EFFETTIVO in radianti = cono base dell'arma + rinculo accumulato (`_bloom`). */
+  currentSpread() {
+    const def = this.weaponDef;
+    return THREE.MathUtils.degToRad(def.spread) + this._bloom;
   }
 
   _fire(def) {
@@ -693,39 +942,66 @@ export class Player {
     if (!this._fps) _v1.y = Math.max(0.7, _v1.y);
     const muzzle = _v1.clone();
 
+    // materiali condivisi per colore: nucleo (capsula) + alone (sprite testa)
+    let mat = this._bulletMats.get(def.tracer);
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({
+        color: def.tracer, transparent: true, opacity: 0.42, // tenue: proiettile poco invadente
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      this._bulletMats.set(def.tracer, mat);
+    }
+    let hmat = this._bulletHaloMats.get(def.tracer);
+    if (!hmat) {
+      hmat = new THREE.SpriteMaterial({
+        map: softDotTexture(), color: def.tracer, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      this._bulletHaloMats.set(def.tracer, hmat);
+    }
+    // spread EFFETTIVO = base + rinculo accumulato → i proiettili cadono nel cono del mirino
+    const spread = this.currentSpread();
+    // basi perpendicolari alla direzione (cono circolare 2D in FPS che RIEMPIE il cerchio)
+    const up0 = Math.abs(aimD.y) > 0.92 ? _xAxis : _vUp;
+    _bR.crossVectors(up0, aimD).normalize();
+    _bU.crossVectors(aimD, _bR).normalize();
+
     for (let p = 0; p < def.pellets; p++) {
-      const spread = THREE.MathUtils.degToRad(def.spread);
-      const a = (Math.random() - Math.random()) * spread;
-      const cos = Math.cos(a), sin = Math.sin(a);
-      const dir = new THREE.Vector3(
-        aimD.x * cos - aimD.z * sin,
-        aimD.y,
-        aimD.x * sin + aimD.z * cos,
-      ).normalize();
-      // additivo: il tracciante caldo "brucia" sul fondo scuro e viene esaltato dal bloom,
-      // come un vero proiettile illuminante invece di un dardo di plastica colorata.
-      let mat = this._bulletMats.get(def.tracer);
-      if (!mat) {
-        mat = new THREE.MeshBasicMaterial({
-          color: def.tracer, transparent: true, opacity: 0.95,
-          blending: THREE.AdditiveBlending, depthWrite: false,
-        });
-        this._bulletMats.set(def.tracer, mat);
+      if (this._fps) {
+        // cono circolare attorno allo sguardo (riempie il mirino): azimut + raggio casuali
+        const az = Math.random() * Math.PI * 2;
+        const rr = Math.sqrt(Math.random()) * spread;
+        const sr = Math.sin(rr), cr = Math.cos(rr);
+        _bDir.copy(aimD).multiplyScalar(cr)
+          .addScaledVector(_bR, sr * Math.cos(az))
+          .addScaledVector(_bU, sr * Math.sin(az)).normalize();
+      } else {
+        // top-down: ventaglio ORIZZONTALE (i pallettoni restano a terra, non volano in aria)
+        const a = (Math.random() - Math.random()) * spread;
+        const cs = Math.cos(a), sn = Math.sin(a);
+        _bDir.set(aimD.x * cs - aimD.z * sn, aimD.y, aimD.x * sn + aimD.z * cs).normalize();
       }
       const mesh = new THREE.Mesh(this._bulletGeo, mat);
       mesh.position.copy(muzzle);
-      mesh.quaternion.setFromUnitVectors(_zAxis, dir); // dardo orientato lungo la traiettoria
-      mesh.scale.set(0.6, 0.6, 5.5); // sottile e allungato: una scia, non una sfera
+      mesh.quaternion.setFromUnitVectors(_zAxis, _bDir);
+      mesh.scale.set(1, 1, 1.5); // scia sottile e affusolata (la capsula traila dietro la testa)
       mesh.renderOrder = 13;
       g.scene.add(mesh);
+      const head = new THREE.Sprite(hmat); // testa luminosa morbida (piccola = discreta)
+      head.scale.setScalar(0.15);
+      head.position.copy(muzzle);
+      head.renderOrder = 14;
+      g.scene.add(head);
       this.bullets.push({
-        mesh, prev: muzzle.clone(), vel: dir.clone().multiplyScalar(def.speed),
+        mesh, head, prev: muzzle.clone(), vel: _bDir.clone().multiplyScalar(def.speed),
         dmg: def.dmg, pierce: def.pierce, knock: def.knock, life: 0.8,
         hitIds: new Set(), color: def.tracer,
       });
-      g.effects.tracer(muzzle, _v2.copy(muzzle).addScaledVector(dir, 1.8), def.tracer);
+      g.effects.tracer(muzzle, _v2.copy(muzzle).addScaledVector(_bDir, 1.8), def.tracer);
     }
     g.stats.shots += def.pellets;
+    // RINCULO: accresci lo spread (cerchio + dispersione), poi rientra (vedi update())
+    this._bloom = Math.min(this._bloom + THREE.MathUtils.degToRad(def.bloom), THREE.MathUtils.degToRad(def.bloom) * 3.5);
 
     // lampo di volata: in FPS piccolo e ancorato alla bocca (no flash a schermo); in
     // visuale dall'alto la versione ampia, leggibile da lontano.
@@ -734,8 +1010,10 @@ export class Player {
     } else {
       g.effects.muzzle(muzzle, this.aimDir, def.light, 1 + def.shake * 1.8);
     }
-    this._playGunAnim(this._gunShoot, 0.13); // carrello che arretra (clip corta estratta)
-    this._vmRecoil = Math.min(1, this._vmRecoil + 0.85); // calcio del viewmodel in FPS
+    this._playGunAnim(this._gunShoot, this._gunShootFit); // carrello/pump (fit per arma)
+    // IMPULSO alla molla del rinculo, per arma: il fucile calcia forte, l'auto (mitra) poco perché
+    // si accumula a raffica (vedi calibrazione in tools/fps-recoil-check.mjs).
+    this._vmRecoilVel += def.auto ? 9 : (def.id === 'shotgun' ? 25 : def.id === 'magnum' ? 22 : 15);
     g.effects.addTrauma(def.shake);
     Audio.play('shot_' + def.id, { vol: 0.85 });
     // rinculo visivo della camera gestito dal trauma; piccolo arretramento del corpo
@@ -750,11 +1028,12 @@ export class Player {
       b.life -= dt;
       b.prev.copy(b.mesh.position);
       b.mesh.position.addScaledVector(b.vel, dt);
-      // sottile scia luminosa che si dissolve dietro il tracciante (non un alone gonfio)
+      if (b.head) b.head.position.copy(b.mesh.position); // la testa luminosa segue il nucleo
+      // scia luminosa morbida e SOTTILE che si dissolve dietro il tracciante (strascico discreto)
       g.effects.additive.emit({
         pos: b.mesh.position,
         vel: _v2.set(0, 0, 0),
-        color: b.color, life: 0.06, size: 0.08, sizeEnd: 0.005, gravity: 0, drag: 1,
+        color: b.color, life: 0.09, size: 0.07, sizeEnd: 0.005, gravity: 0, drag: 1,
       });
 
       // collisione segmento-cerchio con i nemici
@@ -792,6 +1071,7 @@ export class Player {
 
       if (b.life <= 0 || Math.hypot(qx, qz) > g.world.maxExtent + 6) {
         g.scene.remove(b.mesh);
+        if (b.head) g.scene.remove(b.head);
         this.bullets.splice(i, 1);
       }
     }
@@ -840,7 +1120,7 @@ export class Player {
     this._fps = on;
     if (this.model) this.model.visible = !on;
     if (this._gunHands) for (const h of this._gunHands) h.visible = on; // mani-viewmodel in FPS
-    if (!on) { this._vmRecoil = 0; this._vmSwayX = 0; this._vmSwayY = 0; }
+    if (!on) { this._vmRecoil = 0; this._vmRecoilVel = 0; this._vmSwayX = 0; this._vmSwayY = 0; }
   }
 
   reset() {
@@ -852,6 +1132,7 @@ export class Player {
     this.current = 'pistol';
     this._mountGun('pistol');
     this.reloadT = 0;
+    this._shellReloading = false;
     this.fireTimer = 0;
     this.dashCharges = CONFIG.player.dashCharges;
     this.dashRegen = 0;
@@ -860,7 +1141,7 @@ export class Player {
     this.vel.set(0, 0, 0);
     this.pos.set(0, 0, 0);
     this.root.rotation.set(0, 0, 0);
-    for (const b of this.bullets) this.game.scene.remove(b.mesh);
+    for (const b of this.bullets) { this.game.scene.remove(b.mesh); if (b.head) this.game.scene.remove(b.head); }
     this.bullets = [];
     for (const gh of this._dashGhosts) { this.game.scene.remove(gh.obj); gh.mat.dispose(); }
     this._dashGhosts = [];

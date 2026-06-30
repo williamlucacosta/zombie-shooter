@@ -74,13 +74,23 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
 - **Pistola (Glock-17 animata, clip sparo/ricarica)**: **"Glock-17 Animated (Free)" di BarcodeGames**
   ([Sketchfab](https://sketchfab.com/3d-models/glock-17-animated-free-ab6ce788574147ce92b73d49915c123f)) —
   **CC BY 4.0** (attribuzione richiesta)
+- **Mitra (KRISS Vector animato, clip sparo/ricarica)**: **"Kriss Vector Animated (Free)" di BarcodeGames**
+  ([Sketchfab](https://sketchfab.com/3d-models/kriss-vector-animated-free-54530c888cfd4ae7aab3c3852b229c7e)) —
+  **CC BY 4.0** (attribuzione richiesta). Stesse mani guantate del Glock (stessa serie).
+- **Magnum (Mark 23 animato, clip sparo/ricarica)**: **"Mark 23 Animated (Free)" di BarcodeGames**
+  ([Sketchfab](https://sketchfab.com/3d-models/mark-23-animated-free-7abebe340aca4f46b36368417b3ca920)) —
+  **CC BY 4.0** (attribuzione richiesta). Stesse mani guantate del Glock (stessa serie).
+- **Fucile a pompa (viewmodel FPS animato: braccia+mani+arma, ricarica a colpo singolo)**:
+  **"FPS Arms remington (shotgun)" di Cransh**
+  ([Sketchfab](https://sketchfab.com/3d-models/fps-arms-remington-shotgun-e68ef617fe8a48cca8610d016ffd5881)) —
+  **CC BY 4.0** (attribuzione richiesta). Idle/cammina/sparo/ricarica; la mano carica i pallettoni uno a uno.
 - **Brute / Boss (Mutant realistico, 13 animazioni di combattimento)**: "Mutant" di [Adobe Mixamo](https://www.mixamo.com)
   (mesh + animazioni + texture creatura) — Mixamo royalty-free per uso commerciale. Crepe rese emissive nel gioco.
 - **Crawler (lupo che carica)**: **"Wolf with Animations" di 3DHaupt**
   ([Sketchfab](https://sketchfab.com/3d-models/wolf-with-animations-f3769a474a714ebbbaca0d97f9b0a5a0)) —
   **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
-- **Altri personaggi e armi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
-  (cane/hound, fucile/mitra/magnum; Big Arm e strisciante come ripieghi) via [poly.pizza](https://poly.pizza) — CC0
+- **Altri personaggi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
+  (cane/hound; Big Arm e strisciante come ripieghi) via [poly.pizza](https://poly.pizza) — CC0
 - **Scheletri e scenografia cimitero**: [Kay Lousberg / KayKit](https://kaylousberg.com) —
   Skeletons Pack + Halloween Bits — CC0
 - **Texture terreno/zone (PBR realistiche)**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock,
@@ -99,6 +109,9 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
   "male strain/hurt", "Oldschool Horror Theme") — CC0
 - **Tuoni/fulmini** ("Storm thunderbolts") e **schianto del boss** (esplosione): registrazioni
   reali da [Wikimedia Commons](https://commons.wikimedia.org) — Pubblico Dominio
+- **Sparo del fucile a pompa** e **inserimento bossoli** (ricarica a colpo singolo): registrazioni
+  reali di Joseph Sardin / [BigSoundBank](https://bigsoundbank.com) ("Shotgun: Shots",
+  "Pistolet, chargement", rielaborate) — CC0
 - **Pioggia**: Ylmir "Rain (loopable)" — CC0; **Passi**: TinyWorlds "Different steps" — CC0;
   **Musica** "The Surreal Truth" di Joth — CC0; **ruggito boss** di trazzz123 — CC0;
   **voci zombi/battito** da artisticdude, saturn91, SpringySpringo, bart — CC0;

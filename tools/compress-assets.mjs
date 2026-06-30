@@ -42,6 +42,13 @@ const MODELS = [
   // legge i vertici in bind-pose): la quantizzazione meshopt sposta la bind-pose -> bocca sbagliata
   // (flash/proiettili fuori posto in FPS e top-down). Quindi solo texture webp, geometria intatta.
   { src: 'models/gun_pistol_glock.glb', noQuant: true },
+  // KRISS Vector e Mark 23 sono SKINNATI come il glock e da loro si legge la bocca in bind-pose
+  // (player._computeMuzzleLocal) -> stessa trappola: niente quantizzazione, solo webp.
+  { src: 'models/gun_smg_kriss.glb', noQuant: true },
+  { src: 'models/gun_magnum_mk23.glb', noQuant: true },
+  // Fucile a pompa = viewmodel skinnato con bind-pose "esplosa" (coordinate enormi): la
+  // quantizzazione meshopt perderebbe precisione -> solo webp (niente quant).
+  { src: 'models/gun_shotgun_cransh.glb', noQuant: true },
   // .gltf+.bin+texture esterne -> un singolo .glb autosufficiente (cambia l'URL nel manifest)
   { src: 'models/mutant/a.gltf', dst: 'models/mutant/a.glb' },
   { src: 'models/ph/boulder_01/boulder_01_1k.gltf', dst: 'models/ph/boulder_01/boulder_01_1k.glb' },
