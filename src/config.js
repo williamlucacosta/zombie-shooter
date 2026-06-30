@@ -113,10 +113,10 @@ export const WEAPONS = {
     spread: 5.2, bloom: 2.2, speed: 70, pellets: 7, pierce: 0, reserve: 30, maxReserve: 48, auto: false,
     knock: 5.0, tracer: 0xffc079, shake: 0.24, light: 0xffd29a,
     // ricarica a COLPO SINGOLO: un bossolo ogni shellTime secondi (+1 in canna), interrompibile
-    // sparando (tieni quelli già caricati). Vedi player.startReload / _endShellReload. shellTime alto
-    // (cadenza lenta) perché la clip di ricarica (6.8s, ~6 inserimenti) non venga compressa troppo:
-    // a 0.7s i 6 bossoli (mag*shellTime≈4.2s, clip ~1.6×) sono TUTTI visibili e i click distinti.
-    shellReload: true, shellTime: 0.7,
+    // sparando (tieni quelli già caricati). Vedi player.startReload / _endShellReload. La clip di
+    // ricarica è ESTESA a 6 inserimenti visibili (player._extendReloadClip, ~9.55s da ~6.8s); shellTime
+    // è scelto così che mag*shellTime≈5.9s = quella clip a ~1.62× → STESSA velocità di gesto di prima.
+    shellReload: true, shellTime: 0.98,
   },
   smg: {
     id: 'smg', slot: 3, name: 'MITRA', dmg: 8, rof: 0.082, mag: 34, reload: 1.6,

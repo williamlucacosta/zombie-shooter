@@ -69,6 +69,11 @@ const MAX_HEAD = 1.25;     // ~72° collo, simmetrico
 // Campione di ricarica per arma (registrazioni reali CC0, corte).
 const RELOAD_SOUNDS = { pistol: 'reload_pistol', shotgun: 'shotgun_pump', smg: 'reload_rifle', magnum: 'reload_pistol' };
 
+// Dopo l'ULTIMO inserimento del fucile a pompa, lascia scorrere ancora questo tanto di clip (s) così
+// la mano COMPLETA la spinta del bossolo nel portello prima che l'arma si abbassi: sennò la dissolvenza
+// verso l'idle parte sul picco e taglia la spinta → "l'ultimo bossolo non si vede entrare".
+const SHELL_FINISH = 0.45;
+
 // Calibrazione dell'aggancio dell'arma alla mano. Anchor nel palmo (frazione polso->nocca)
 // + offset fini nella base dell'arma (x=lato, y=su, z=avanti). lateralSign/upSign correggono
 // l'orientamento se la base esce rovesciata. Esposto su window.__GUNCAL per il tuning live.
@@ -252,7 +257,7 @@ export class Player {
 
   _mountGun(id) {
     this._gunMixer = null; this._gunClips = null; this._gunShoot = null; this._gunReload = null; this._gunHands = null;
-    this._gunIdle = null; this._gunShootFit = 0.13; this._gunCurAction = null;
+    this._gunIdle = null; this._gunShootFit = 0.13; this._gunCurAction = null; this._shellInsertTimes = null;
     while (this.gunMount.children.length) this.gunMount.remove(this.gunMount.children[0]);
     const def = WEAPONS[id];
     const entry = Assets.guns.get(id);
@@ -376,6 +381,20 @@ export class Player {
     this._gunIdle = idle;
     this._gunShoot = clips.find((c) => /shot|fire|shoot/i.test(c.name)) || null;
     this._gunReload = clips.find((c) => /reload/i.test(c.name)) || null;
+    // la clip di ricarica mostra ~4 inserimenti ma il caricatore è 6: duplico 2 volte UN ciclo di
+    // caricamento e lo inserisco nella clip → 6 inserimenti VISIBILI. La finestra [1.10,2.47]s è un
+    // ciclo intero (contiene UN picco di inserimento ~2.43): inizio/fine sono poco DOPO un picco,
+    // cioè la STESSA fase del movimento → giunzione fluida (niente scatti come nel loop a runtime).
+    // La RIPRODUZIONE non cambia: _playGunAnim gira la clip (ora più lunga) in mag*shellTime; shellTime
+    // è alzato in config così la velocità del gesto (≈1.62×) resta IDENTICA a prima.
+    // _shellInsertTimes = gli istanti (s) di inserimento NELLA clip estesa: suono e +1 al caricatore
+    // scattano quando l'animazione li raggiunge (vedi update) → in fase col gesto, non su un timer.
+    const RL_INS = [1.06, 2.43, 3.77, 5.07]; // inserimenti nella clip ORIGINALE (picchi mano al portello)
+    const RL_T0 = 1.10, RL_T1 = 2.47, RL_COPIES = 2;
+    if (this._gunReload) {
+      this._gunReload = this._extendReloadClip(this._gunReload, RL_T0, RL_T1, RL_COPIES);
+      this._shellInsertTimes = this._extendedInsertTimes(RL_INS, RL_T0, RL_T1, RL_COPIES);
+    }
     this._gunShootFit = entry.shootFit || 0.4;
     mixer.addEventListener('finished', () => this._playIdle());
     this._playIdle();
@@ -405,6 +424,48 @@ export class Player {
     }
     if (!isFinite(mn)) return clip.clone();
     return THREE.AnimationUtils.subclip(clip.clone(), name, Math.floor(mn * 30), Math.ceil(mx * 30) + 1, 30);
+  }
+
+  /**
+   * Allunga una clip duplicando `copies` volte il ciclo di keyframe [t0,t1] (secondi) e inserendolo
+   * subito dopo t1 → la clip "ripete" quel gesto altre `copies` volte, restando UNA clip continua
+   * (nessun loop a runtime, nessuno scatto se t0 e t1 sono la stessa posa). Per ogni traccia: tiene i
+   * keyframe ≤ t1, poi le copie del segmento (t0,t1] sfasate di k·(t1−t0), poi il resto sfasato di
+   * copies·(t1−t0). Usato per portare la ricarica del fucile a pompa da ~4 a 6 inserimenti VISIBILI.
+   */
+  _extendReloadClip(clip, t0, t1, copies) {
+    try {
+      const dt = t1 - t0, eps = 1e-4;
+      const out = clip.clone();
+      for (const track of out.tracks) {
+        const T = track.times, V = track.values;
+        const stride = V.length / T.length;
+        const nt = [], nv = [];
+        const push = (time, i) => { nt.push(time); for (let s = 0; s < stride; s++) nv.push(V[i * stride + s]); };
+        for (let i = 0; i < T.length; i++) if (T[i] <= t1 + eps) push(T[i], i);                 // A: ≤ t1
+        for (let k = 1; k <= copies; k++)                                                        // copie del ciclo
+          for (let i = 0; i < T.length; i++) if (T[i] > t0 + eps && T[i] <= t1 + eps) push(T[i] + k * dt, i);
+        for (let i = 0; i < T.length; i++) if (T[i] > t1 + eps) push(T[i] + copies * dt, i);     // B: resto sfasato
+        track.times = new Float32Array(nt);
+        track.values = new Float32Array(nv);
+      }
+      out.resetDuration();
+      return out;
+    } catch (e) {
+      return clip; // in caso di clip con struttura inattesa, meglio l'originale che un crash
+    }
+  }
+
+  /**
+   * Dove finiscono gli istanti di inserimento dopo _extendReloadClip (stessa logica A/copie/B): serve
+   * a far scattare suono+caricatore in fase col gesto. Ritorna i tempi (s) ordinati nella clip estesa.
+   */
+  _extendedInsertTimes(inserts, t0, t1, copies) {
+    const dt = t1 - t0, out = [];
+    for (const x of inserts) if (x <= t1) out.push(x);                                  // A
+    for (let k = 1; k <= copies; k++) for (const x of inserts) if (x > t0 && x <= t1) out.push(x + k * dt); // copie
+    for (const x of inserts) if (x > t1) out.push(x + copies * dt);                     // B
+    return out.sort((a, b) => a - b);
   }
 
   /**
@@ -686,7 +747,8 @@ export class Player {
     // ricarica a COLPO SINGOLO (fucile a pompa): carica un bossolo alla volta, interrompibile.
     if (def.shellReload) {
       this._shellReloading = true;
-      this._shellTimer = def.shellTime; // primo bossolo dopo un tempo (il fucile si alza)
+      this._shellNext = 0; // prossimo inserimento da contabilizzare (in fase con la clip, vedi update)
+      this._shellDone = false; // l'ultimo bossolo è entrato: si attende che il gesto si completi
       // l'intera clip di caricamento scorre nel tempo di un caricatore pieno → pacing naturale
       this._playGunAnim(this._gunReload, def.mag * def.shellTime);
       Audio.play('shotgun_pump', { vol: 0.55, pitchVar: 0.05 });
@@ -872,9 +934,14 @@ export class Player {
         g.ui.ammo(this);
       }
     } else if (this._shellReloading) {
-      // un bossolo alla volta: ogni inserimento aumenta di 1 in canna fino al massimo
-      this._shellTimer -= dt;
-      if (this._shellTimer <= 0) {
+      // SINCRONIZZATO ALL'ANIMAZIONE: il bossolo (suono + caricatore) entra quando l'animazione
+      // raggiunge ciascun istante di inserimento della clip (_shellInsertTimes), non su un timer fisso
+      // → click e +1 cadono esattamente quando la mano spinge il bossolo nel portello.
+      const act = this._gunMixer && this._gunReload ? this._gunMixer.clipAction(this._gunReload) : null;
+      const t = act ? act.time : Infinity;
+      const times = this._shellInsertTimes || [];
+      while (!this._shellDone && this._shellNext < times.length && t >= times[this._shellNext]) {
+        this._shellNext++;
         const def = this.weaponDef, w = this.ammo;
         if (w.mag < def.mag && w.reserve > 0) {
           w.mag++;
@@ -882,9 +949,15 @@ export class Player {
           Audio.play('shotgun_insert', { vol: 0.6, pitchVar: 0.06, volVar: 0.08 });
           g.ui.ammo(this);
         }
-        if (w.mag >= def.mag || w.reserve <= 0) this._endShellReload(); // pieno → fine
-        else this._shellTimer = def.shellTime; // prossimo bossolo
+        if (w.mag >= def.mag || w.reserve <= 0) {
+          // ULTIMO bossolo entrato: NON abbassare subito. Lascia completare la spinta+ritiro della mano
+          // (altri SHELL_FINISH s di clip), poi _endShellReload → così il bossolo si vede entrare.
+          this._shellDone = true;
+          this._shellEndAt = t + SHELL_FINISH;
+          g.ui.reloading(false); // il caricatore è pieno: spegni subito l'indicatore "RICARICA…"
+        }
       }
+      if (this._shellDone && t >= this._shellEndAt) this._endShellReload(); // gesto completato → abbassa
     }
 
     // ---- cambio arma ----
