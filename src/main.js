@@ -249,14 +249,16 @@ const paint = () => new Promise((r) => requestAnimationFrame(() => requestAnimat
   const T = (window.__loadTimes = { t0: performance.now() });
   // Modelli e SFX essenziali caricati IN PARALLELO; la musica (pesante) è differita.
   // L'etichetta segue la categoria caricata dai modelli; l'audio aggiorna solo la barra.
+  // Gli asset riempiono la barra fino a 0.9: l'ultimo 10% resta alle fasi post-asset (mondo, warm,
+  // nemici, shader) così la barra CONTINUA a muoversi invece di inchiodarsi al 100% mentre lavora.
   let mp = 0, ap = 0;
   await Promise.all([
-    loadAssets((f, label) => { mp = f; ui.loading(mp * 0.5 + ap * 0.5, label); }),
-    Audio.loadFiles((f) => { ap = f; ui.loading(mp * 0.5 + ap * 0.5); }),
+    loadAssets((f, label) => { mp = f; ui.loading((mp + ap) * 0.45, label); }),
+    Audio.loadFiles((f) => { ap = f; ui.loading((mp + ap) * 0.45); }),
   ]);
   T.assets = performance.now() - T.t0;
 
-  ui.loading(1, 'Costruzione del cimitero…');
+  ui.loading(0.9, 'Costruzione del cimitero…');
   await paint();
   game.effects = new Effects(scene);
   game.world = buildWorld(scene);
@@ -273,12 +275,11 @@ const paint = () => new Promise((r) => requestAnimationFrame(() => requestAnimat
   // preparazione della scena; poi compilo gli shader di tutti i modelli. Solo la MUSICA (pesante e
   // ininfluente sul rendering) resta in sottofondo dopo il menu.
   const deferredP = loadDeferredAssets(); // rete in parallelo al warm del mondo
-  ui.loading(1, 'Preparazione scena…');
+  ui.loading(0.92, 'Preparazione scena…');
   await warmPipeline();                   // mondo + postprocessing + ombre + texture (visibile)
-  ui.loading(1, 'Caricamento nemici…');
+  ui.loading(0.95, 'Caricamento nemici…');
   await deferredP;
-  ui.loading(1, 'Compilazione shader…');
-  await prewarmShaders();                 // tutti i modelli: programma principale + d'ombra
+  await prewarmShaders();                 // tutti i modelli: programma principale + d'ombra (0.95→1)
   T.ready = performance.now() - T.t0;
 
   ui.readyToPlay(best0);
@@ -299,7 +300,10 @@ async function warmPipeline() {
 //    il main thread NON si blocca. I modelli sono tenuti INVISIBILI durante l'attesa, sennò il loop
 //    li renderizzerebbe (lampeggio dietro la barra).
 //  • PROFONDITÀ (caster d'ombra skinnato): compileAsync NON lo compila (lo fa three solo al render
-//    della shadow map) -> un solo render batch di tutti i modelli, fuori schermo. Stallo minimo.
+//    della shadow map). Un UNICO render di tutti i modelli insieme bloccava il main thread per ~1-2s
+//    -> la barra "si inchiodava" su «Compilazione shader…». Lo spezziamo UN MODELLO PER FRAME: un
+//    solo modello visibile a turno, un render fuori schermo, e cedo il thread (paint) tra uno e
+//    l'altro -> la barra avanza (0.95→1) e la schermata NON si blocca.
 const _warmRT = new THREE.WebGLRenderTarget(8, 8);
 const _prewarmed = new Set();
 async function prewarmShaders() {
@@ -310,13 +314,18 @@ async function prewarmShaders() {
   add(Assets.player?.scene);
   for (const c of Assets.characters.values()) add(c.scene);
   for (const g of Assets.guns.values()) add(g.scene);
-  if (temps.length) {
-    try { await renderer.compileAsync(scene, camera); } catch { /* best effort */ }
-    for (const s of temps) s.visible = true;
-    // l'arma in mano (glock, già nella scena via gunMount ma invisibile nel menu) la rendo visibile
-    // per questo solo render, così scalda anche il suo programma d'ombra: niente scatto al via.
-    const gm = game.player.gunMount, gmVis = gm?.visible;
-    if (gm) gm.visible = true;
+
+  // 1) PROGRAMMA PRINCIPALE: compilazione parallela mentre i modelli restano invisibili.
+  if (temps.length) { try { await renderer.compileAsync(scene, camera); } catch { /* best effort */ } }
+
+  // 2) PROGRAMMA D'OMBRA, un modello per frame. L'arma in mano (gunMount, invisibile nel menu) la
+  //    scaldo per ultima così anche il suo depth program è pronto: niente scatto al via.
+  const gm = game.player.gunMount, gmVis = gm?.visible;
+  const list = [...temps];
+  if (gm) list.push(gm);
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i], was = s.visible;
+    s.visible = true;
     const prev = renderer.getRenderTarget();
     try {
       renderer.shadowMap.needsUpdate = true;
@@ -325,10 +334,16 @@ async function prewarmShaders() {
     } catch { /* best effort */ }
     finally {
       renderer.setRenderTarget(prev);
-      if (gm) gm.visible = gmVis;
-      for (const s of temps) scene.remove(s);
+      s.visible = (s === gm) ? gmVis : was; // durante il loop i temp restano nascosti, gm torna com'era
     }
+    ui.loading(0.95 + 0.05 * ((i + 1) / list.length), 'Compilazione shader…');
+    await paint(); // cede il thread: la barra si ridisegna, niente freeze
   }
+
+  // Le scene sorgente sono usate come STAMPO: player/nemici/armi si clonano da qui (skeletonClone) e
+  // il clone eredita il `.visible` della radice. Vanno lasciate VISIBILI, sennò le armi montate DOPO
+  // (es. reload → _mountGun al PLAY) escono invisibili. Le tolgo dalla scena: erano solo temp.
+  for (const s of temps) { s.visible = true; scene.remove(s); }
   if (window.__loadTimes) { window.__loadTimes.prewarmRunning = false; window.__loadTimes.prewarmDone = performance.now() - window.__loadTimes.t0; }
 }
 

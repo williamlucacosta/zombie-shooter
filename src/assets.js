@@ -45,26 +45,50 @@ const MANIFEST = {
     skeleton_c: { url: 'assets/models/skeleton_c.glb', yaw: 0, height: 1.8, deferred: true },
   },
   guns: {
-    // Armi realistiche skinnate con mani guantate + clip Reload/Shoot/Hide/Draw, stessa "serie"
-    // (rig Hand_D/Glove_D) → mani e ricarica coerenti tra le armi. La canna è l'asse più lungo
-    // (auto-allineata a +Z in player._buildGunWrap); `length` = lunghezza in mano (unità mondo).
-    // axis:'z' = canna già lungo +Z (i modelli realistici lo sono tutti); evita l'euristica
-    // "asse più lungo" che sbaglia sulle pistole tozze (Mark 23 più alto che lungo).
-    pistol: { url: 'assets/models/gun_pistol_glock.glb', length: 0.42, axis: 'z' }, // Glock-17 (BarcodeGames, CC-BY)
-    // vmShift: abbassa il viewmodel così l'avambraccio si vede INTERO ma il gomito "tagliato"
-    // (osso aperto) finisce sotto il bordo dello schermo.
-    smg: { url: 'assets/models/gun_smg_kriss.glb', length: 0.62, axis: 'z', vmShift: { y: -0.05, z: -0.04 } }, // KRISS Vector (CC-BY)
-    // Mark 23: pistola → usa le mani guantate + ricarica del Glock (borrowHands); il suo guanto
-    // proprio in viewmodel mostra un avambraccio "tagliato".
+    // Le 4 armi sono VIEWMODEL FPS COMPLETI (braccia+mani+arma in un solo rig skinnato) con clip
+    // AUTORALI di idle/sparo/ricarica (fast + full) → mount dedicato player._mountViewmodel:
+    // misura la geometria in posa idle, scala la canna a `length`, braccia visibili solo in FPS,
+    // idle in loop, sparo/ricarica una volta e ritorno all'idle in dissolvenza.
+    // gunRe = regex sui nomi dei MATERIALI che individua le mesh dell'ARMA (a runtime i nomi
+    // mesh sono persi: GLTFLoader li sovrascrive col nome nodo "Object_N", i materiali no).
+    // Le mesh che non matchano = braccia. Senza gunRe si usa l'euristica geometrica (canna =
+    // mesh più lunga in Z, braccia = mesh larghe in X). File da tools/sf-gun-clean.mjs.
+    // ⚠️ vmShift è nel frame dello SGUARDO con base R=cross(up,F): **x POSITIVO = SINISTRA dello
+    // schermo, NEGATIVO = destra** (y su, z avanti). Il global __VM {x:0.2,y:-0.19,fwd:0.5} è
+    // tarato sul fucile a pompa (arma lunga, quasi centrata): le armi corte senza correzione
+    // finivano in basso a sinistra, mezze fuori schermo → vmShift le porta a DESTRA e le ALZA
+    // (posa da FPS classico); la convergenza fa comunque puntare la volata sul mirino.
+    // muzzleY (opzionale) = frazione 0..1 dell'altezza dell'arma a cui sta la linea di canna;
+    // di default si usa il centro del pezzo più avanzato (canna/silenziatore), che basta.
+    // ⚠️ I candidati Sketchfab vanno VERIFICATI con tools/vm-measure.mjs prima di integrarli:
+    // in alcune conversioni glTF (Makarov Cransh, Deagle 1Matzh) braccia o arma restano in
+    // bind-pose esplosa in ogni clip → mesh a ±15000 unità, inutilizzabili.
+    pistol: {
+      url: 'assets/models/gun_pistol_xd.glb', length: 0.42, viewmodel: true,
+      gunRe: /^material\b/i, shootFit: 0.16,
+      vmShift: { x: -0.28, y: 0.07, z: 0.02 },
+    }, // "FPS pistol animations" Springfield XD (Cransh, CC-BY; arma di raimeiyonke, mani di DJMaesen)
+    smg: {
+      url: 'assets/models/gun_smg_mpa.glb', length: 0.66, viewmodel: true,
+      gunRe: /material_45\d/i, shootFit: 0.1,
+      // y: canna ~7° sotto il centro (a y=0 la canna finiva SOPRA il mirino e copriva la visuale);
+      // z: i gomiti del rig arrivano quasi alla camera → spinto avanti oltre il near plane.
+      vmShift: { x: -0.26, y: -0.08, z: 0.12 },
+    }, // "SMG FPS Animations" MPA 30 SST (Cransh, CC-BY; arma di eNse7en, mani di DJMaesen)
     magnum: {
-      url: 'assets/models/gun_magnum_mk23.glb', length: 0.46, axis: 'z', borrowHands: true,
-      handGrip: { scale: 0.95, z: 0.04, y: 0.0, x: 0.0 },
-    }, // Mark 23 .45 (CC-BY)
-    // Fucile a pompa: viewmodel FPS COMPLETO (braccia+mani+arma in un rig skinnato) con presa a due
-    // mani e ricarica a COLPO SINGOLO (la mano carica i pallettoni uno a uno). "FPS Arms remington
-    // (shotgun)" di Cransh. viewmodel:true → mount dedicato (misura idle, scala, idle in loop).
+      url: 'assets/models/gun_magnum_revolver.glb', length: 0.52, viewmodel: true,
+      gunRe: /revolver/i, shootFit: 0.45,
+      // timeline unica "allanims" (10.7s): finestre in secondi ricavate col profilo di moto
+      // (tools/vm-measure.mjs + analisi rinculo/quota): estrazione, 6 cicli di sparo identici
+      // (2.1–6.3), ricarica (l'arma si inclina e scende per lo scarico), idle speculare.
+      clipWindows: { draw: [0, 0.9], shoot: [2.02, 2.72], reload: [6.35, 8.45], idle: [8.9, 9.8] },
+      vmShift: { x: -0.28, y: 0.06, z: 0.03 },
+    }, // "revolver animated" (bumstrum/DJMaesen, CC-BY)
+    // Fucile a pompa con presa a due mani e ricarica a COLPO SINGOLO (la mano carica i
+    // pallettoni uno a uno). "FPS Arms remington (shotgun)" di Cransh.
     shotgun: {
       url: 'assets/models/gun_shotgun_cransh.glb', length: 1.2, viewmodel: true,
+      gunRe: /remington|12ge/i,
       vmAdjust: { x: -0.18, y: 0.08, z: -0.04 },
       // vmShift: abbassa il viewmodel nel frame camera così la volata/le mani stanno SOTTO il
       // centro schermo e il mirino (anche ampio) non finisce sull'arma.
@@ -220,7 +244,7 @@ export async function loadAssets(onProgress) {
     jobs.push(track(tryGLB(def.url), 'Armi').then((g) => {
       if (g) {
         g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-        Assets.guns.set(name, { scene: g.scene, length: def.length, axis: def.axis, flip: def.flip, gloveOnly: def.gloveOnly, borrowHands: def.borrowHands, viewmodel: def.viewmodel, vmAdjust: def.vmAdjust, vmShift: def.vmShift, shootFit: def.shootFit, handGrip: def.handGrip, animations: g.animations || [] });
+        Assets.guns.set(name, { scene: g.scene, length: def.length, axis: def.axis, flip: def.flip, viewmodel: def.viewmodel, gunRe: def.gunRe, muzzleY: def.muzzleY, clipWindows: def.clipWindows, vmAdjust: def.vmAdjust, vmShift: def.vmShift, shootFit: def.shootFit, animations: g.animations || [] });
       }
     }));
   }

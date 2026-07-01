@@ -207,9 +207,9 @@ export class Player {
   get ammo() { return this.weapons[this.current]; }
 
   /**
-   * Costruisce il viewmodel di un'arma: la ruota (canna lungo +Z), la scala e la ricentra
-   * sull'impugnatura. `handsOnly` nasconde le parti dell'arma e tiene solo le mani/guanti del rig
-   * (per "prestare" le mani guantate del glock alle armi che non ne hanno). Ritorna {wrap, gun, hands}.
+   * RIPIEGO per armi senza viewmodel:true (in gioco non ce ne sono più; resta come rete di
+   * sicurezza): ruota l'arma (canna lungo +Z), la scala e la ricentra sull'impugnatura.
+   * `handsOnly` tiene solo le eventuali mani/guanti del rig. Ritorna {wrap, gun, hands}.
    */
   _buildGunWrap(entry, handsOnly = false) {
     const animated = entry.animations && entry.animations.length > 0;
@@ -234,7 +234,7 @@ export class Player {
     }
     const size = gunBox.getSize(_v1);
     // orientazione canna: usa l'hint esplicito entry.axis se presente, sennò l'asse più lungo
-    // (euristica fragile su pistole tozze: il Mark 23 è più ALTO che lungo → andrebbe ruotato a
+    // (euristica fragile su pistole tozze: una pistola può essere più ALTA che lunga → ruotata a
     // sproposito; per questo i modelli realistici dichiarano axis:'z', canna già lungo +Z).
     const axis = entry.axis
       || (size.x >= size.y && size.x >= size.z ? 'x' : (size.y >= size.x && size.y >= size.z ? 'y' : 'z'));
@@ -257,14 +257,17 @@ export class Player {
 
   _mountGun(id) {
     this._gunMixer = null; this._gunClips = null; this._gunShoot = null; this._gunReload = null; this._gunHands = null;
+    this._gunReloadFull = null; this._gunDraw = null;
     this._gunIdle = null; this._gunShootFit = 0.13; this._gunCurAction = null; this._shellInsertTimes = null;
     while (this.gunMount.children.length) this.gunMount.remove(this.gunMount.children[0]);
     const def = WEAPONS[id];
     const entry = Assets.guns.get(id);
     this._vmShift = (entry && entry.vmShift) || null;
-    // viewmodel FPS completo (braccia+arma in un unico rig, es. il fucile a pompa animato):
-    // gestione dedicata (misura, scala, idle in loop, ricarica a colpo singolo).
-    if (entry && entry.viewmodel) { this._mountViewmodel(entry); return; }
+    // viewmodel FPS completo (braccia+arma in un unico rig): gestione dedicata (misura, scala,
+    // idle in loop; ricarica a colpo singolo solo per il fucile a pompa, def.shellReload).
+    if (entry && entry.viewmodel) { this._mountViewmodel(entry, def); return; }
+    // ramo di RIPIEGO (in gioco tutte le armi sono viewmodel:true): arma "nuda" agganciata al
+    // mount, con eventuali clip proprie di sparo/ricarica se il modello le porta.
     if (entry) {
       const built = this._buildGunWrap(entry);
       const { wrap, gun, hands, animated } = built;
@@ -272,42 +275,14 @@ export class Player {
       // nascoste e si usa il braccio del soldato.
       this.gunMount.add(wrap);
       this._gunHands = hands;
-      // sorgente di animazione: l'arma stessa se ha mani+clip (Glock/KRISS/Mark23); altrimenti
-      // (Remington 870, statico) prendo in prestito le mani guantate ANIMATE del Glock.
-      let animRoot = animated ? gun : null;
-      let clips = animated ? entry.animations : null;
-      // mani in prestito dal Glock: armi senza mani proprie (870 statico) OPPURE che le delegano
-      // (Mark 23: è una pistola → le mani guantate pulite + la ricarica del Glock calzano perfette,
-      // mentre il suo guanto proprio in viewmodel mostra un brutto "taglio").
-      if (hands.length === 0 || entry.borrowHands) {
-        if (entry.borrowHands) for (const h of hands) h.visible = false; // via le mani proprie
-        const donor = Assets.guns.get('pistol'); // il Glock porta mani + clip Reload/Shoot
-        if (donor && donor.animations && donor.animations.length) {
-          const hb = this._buildGunWrap(donor, true); // solo mani guantate (arma nascosta)
-          // _buildGunWrap rende già le mani alla dimensione-mondo giusta (il glock è scalato a
-          // donor.length=0.42 a prescindere dall'arma): basta un ritocco di scala + posizione
-          // per posarle sull'impugnatura del fucile (valori in `hb` = entry.handGrip).
-          const g = entry.handGrip || {};
-          hb.wrap.scale.multiplyScalar(g.scale ?? 0.85);
-          hb.wrap.position.z += g.z ?? 0.0;
-          hb.wrap.position.y += g.y ?? 0.0;
-          hb.wrap.position.x += g.x ?? 0.0;
-          this._borrowedHandsWrap = hb.wrap; // per la calibrazione live
-          this.gunMount.add(hb.wrap);
-          this._gunHands = hb.hands;
-          animRoot = hb.gun;        // il rig delle mani in prestito guida la ricarica
-          clips = donor.animations;
-        }
-      }
       for (const h of this._gunHands) h.visible = !!this._fps; // mani visibili solo in FPS
-      if (animRoot && clips) {
-        this._gunMixer = new THREE.AnimationMixer(animRoot);
-        this._gunClips = clips;
-        const shoot = clips.find((c) => /shoot|fire/i.test(c.name));
-        const reload = clips.find((c) => /reload/i.test(c.name));
-        // le clip "serie BarcodeGames" stanno su una timeline condivisa: ogni clip ha keyframe
-        // solo nella propria finestra (es. Shoot del glock ai frame ~98-109). Estraggo la
-        // finestra reale di ciascuna (min..max) e la ribaso a 0 → vale per ogni arma.
+      if (animated) {
+        this._gunMixer = new THREE.AnimationMixer(gun);
+        this._gunClips = entry.animations;
+        const shoot = entry.animations.find((c) => /shoot|fire/i.test(c.name));
+        const reload = entry.animations.find((c) => /reload/i.test(c.name));
+        // alcune serie di clip stanno su una timeline condivisa (keyframe solo nella propria
+        // finestra): estraggo la finestra reale di ciascuna (min..max) e la ribaso a 0.
         this._gunShoot = shoot ? this._trimClip(shoot, 'shoot') : null;
         this._gunReload = reload ? this._trimClip(reload, 'reload') : null;
       }
@@ -321,43 +296,90 @@ export class Player {
   }
 
   /**
-   * Monta un VIEWMODEL FPS completo (braccia+mani+arma in un solo rig skinnato), es. il fucile a
-   * pompa con ricarica a colpo singolo. Misura la geometria in posa idle (la bind-pose di questi
-   * rig è "esplosa" e inutilizzabile), scala la canna a entry.length, classifica canna vs braccia,
-   * calcola la bocca e fa girare l'idle in loop. La ricarica/sparo interrompono e poi tornano a idle.
+   * Monta un VIEWMODEL FPS completo (braccia+mani+arma in un solo rig skinnato): tutte e 4 le armi.
+   * Misura la geometria in posa idle (la bind-pose di questi rig è "esplosa" e inutilizzabile),
+   * scala la canna a entry.length, classifica arma vs braccia (entry.gunRe sui nomi dei MATERIALI,
+   * o euristica geometrica), raddrizza i rig esportati verso -Z, calcola la bocca e fa girare
+   * l'idle in loop. Sparo/ricarica/estrazione interrompono e poi tornano a idle in dissolvenza.
    */
-  _mountViewmodel(entry) {
+  _mountViewmodel(entry, def) {
     const model = skeletonClone(entry.scene);
     model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-    const clips = entry.animations || [];
+    let clips = entry.animations || [];
+    // timeline UNICA (es. revolver bumstrum: una sola clip con tutte le azioni in fila):
+    // entry.clipWindows = { idle:[t0,t1], shoot:[..], reload:[..], draw:[..] } in SECONDI →
+    // la affetto in clip nominate; la selezione per scopo sotto procede come per clip separate.
+    if (entry.clipWindows && clips.length === 1) {
+      clips = Object.entries(entry.clipWindows).map(([nm, [t0, t1]]) =>
+        THREE.AnimationUtils.subclip(clips[0], nm, Math.round(t0 * 100), Math.round(t1 * 100), 100));
+    }
     const idle = clips.find((c) => /idle|watch/i.test(c.name)) || clips[0];
     const mixer = new THREE.AnimationMixer(model);
     // posa idle per misurare la geometria SKINNATA (computeBoundingBox usa i vertici deformati)
     if (idle) { mixer.clipAction(idle).play(); mixer.update(0.3); }
-    model.updateMatrixWorld(true);
-    const metas = [];
-    model.traverse((o) => {
-      if (!o.isMesh) return;
-      const box = new THREE.Box3();
-      if (o.isSkinnedMesh) { o.computeBoundingBox(); box.copy(o.boundingBox); }
-      else { o.geometry.computeBoundingBox(); box.copy(o.geometry.boundingBox); }
-      box.applyMatrix4(o.matrixWorld);
-      metas.push({ o, box, sz: box.getSize(new THREE.Vector3()) });
-    });
-    // canna = mesh con la max estensione in Z (più lunga in avanti); braccia = mesh "larghe" in X;
-    // il resto (bossolo/dettagli) resta con la canna (sempre visibile).
-    let gunMeta = metas[0];
-    for (const m of metas) if (m.sz.z > gunMeta.sz.z) gunMeta = m;
-    // braccia = mesh nettamente più LARGHE della canna (la canna è sottile); il bossolo/dettagli
-    // (mesh strette o minuscole) restano con la canna e restano sempre visibili.
-    const arms = [];
-    for (const m of metas) if (m !== gunMeta && m.sz.x > Math.max(0.2, gunMeta.sz.x * 1.6)) arms.push(m.o);
-    // scala: lunghezza canna -> entry.length; il viewmodel non va riorientato (canna già +Z).
-    const scale = entry.length / Math.max(gunMeta.sz.z, 0.01);
+    const measure = () => {
+      model.updateMatrixWorld(true);
+      const out = [];
+      model.traverse((o) => {
+        if (!o.isMesh) return;
+        const box = new THREE.Box3();
+        if (o.isSkinnedMesh) { o.computeBoundingBox(); box.copy(o.boundingBox); }
+        else { o.geometry.computeBoundingBox(); box.copy(o.geometry.boundingBox); }
+        box.applyMatrix4(o.matrixWorld);
+        out.push({ o, box, sz: box.getSize(new THREE.Vector3()) });
+      });
+      return out;
+    };
+    // classificazione ARMA vs BRACCIA. Coi gunRe: matcha i MATERIALI (i nomi mesh a runtime sono
+    // "Object_N": GLTFLoader li sovrascrive col nome del nodo; i nomi materiale invece restano).
+    // Senza gunRe (ripiego): canna = mesh più lunga in Z, braccia = mesh nettamente più larghe.
+    const matName = (o) => {
+      const m = o.material;
+      return (Array.isArray(m) ? m.map((x) => x && x.name).join(' ') : (m && m.name) || '') + ' ' + o.name;
+    };
+    const classify = (metas) => {
+      let gunParts, arms;
+      if (entry.gunRe) {
+        gunParts = metas.filter((m) => entry.gunRe.test(matName(m.o)));
+        arms = metas.filter((m) => !gunParts.includes(m)).map((m) => m.o);
+        // regex che non matcha niente: tutto-arma e niente braccia (mai mesh nascoste a vuoto)
+        if (!gunParts.length) { gunParts = metas; arms = []; }
+      } else {
+        let g = metas[0];
+        for (const m of metas) if (m.sz.z > g.sz.z) g = m;
+        arms = metas.filter((m) => m !== g && m.sz.x > Math.max(0.2, g.sz.x * 1.6)).map((m) => m.o);
+        gunParts = metas.filter((m) => !arms.includes(m.o));
+      }
+      // unione dei box di TUTTE le mesh dell'arma: le armi spezzate in più mesh (corpo +
+      // silenziatore, slitta + fusto) altrimenti verrebbero scalate/centrate su un pezzo solo
+      // (mitra gigante, impugnatura sotto il bordo dello schermo).
+      const gunBox = new THREE.Box3();
+      for (const m of gunParts) gunBox.union(m.box);
+      return { gunParts, gunBox, arms };
+    };
+    let metas = measure();
+    let { gunParts, gunBox, arms } = classify(metas);
+    // AUTO-FLIP: alcuni rig sono esportati con la canna verso -Z (dipende dall'autore). In un
+    // viewmodel le braccia stanno DIETRO l'arma: se il centro delle braccia risulta DAVANTI al
+    // centro dell'arma, il rig guarda -Z → lo giro di 180° e rimisuro.
+    if (arms.length) {
+      const armsBox = new THREE.Box3();
+      for (const m of metas) if (arms.includes(m.o)) armsBox.union(m.box);
+      const armsC = armsBox.getCenter(new THREE.Vector3());
+      const gunC = gunBox.getCenter(new THREE.Vector3());
+      if (armsC.z > gunC.z) {
+        model.rotation.y = Math.PI;
+        metas = measure();
+        ({ gunParts, gunBox, arms } = classify(metas));
+      }
+    }
+    // scala: lunghezza dell'arma intera -> entry.length (la canna è comunque lungo +Z).
+    const gunSz = gunBox.getSize(_v1);
+    const scale = entry.length / Math.max(gunSz.z, 0.01);
     const wrap = new THREE.Group();
     wrap.add(model);
     wrap.scale.setScalar(scale);
-    const gc = gunMeta.box.getCenter(_v2);
+    const gc = gunBox.getCenter(_v2);
     const adj = entry.vmAdjust || {};
     wrap.position.set(
       -gc.x * scale + (adj.x || 0),
@@ -366,38 +388,57 @@ export class Player {
     );
     this.gunMount.add(wrap);
     this._vmWrap = wrap; // per la calibrazione live
-    // bocca della canna = centro-fronte (max z) della mesh canna, in coordinate gunMount
+    // bocca = fronte (max z) dell'arma. La LINEA DI CANNA è il centro Y del pezzo PIÙ AVANZATO
+    // (quello che contiene il fronte: canna/silenziatore) — robusto anche quando il box totale
+    // include l'impugnatura che pende sotto. entry.muzzleY (frazione 0..1 dell'altezza
+    // dell'unione) lo sovrascrive se serve.
+    let front = gunParts[0];
+    for (const m of gunParts) if (m.box.max.z > front.box.max.z) front = m;
+    const muzY = entry.muzzleY != null
+      ? gunBox.min.y + (gunBox.max.y - gunBox.min.y) * entry.muzzleY
+      : (front.box.min.y + front.box.max.y) / 2;
     this._muzzleLocal.set(
-      (gunMeta.box.min.x + gunMeta.box.max.x) / 2,
-      (gunMeta.box.min.y + gunMeta.box.max.y) / 2,
-      gunMeta.box.max.z,
+      (front.box.min.x + front.box.max.x) / 2,
+      muzY,
+      gunBox.max.z,
     ).multiplyScalar(scale).add(wrap.position);
     // braccia = "mani" (visibili solo in FPS; in top-down resta l'arma sul braccio del soldato)
     this._gunHands = arms;
     for (const h of arms) h.visible = !!this._fps;
-    // animazioni: idle in loop; sparo/ricarica una volta poi ritorno a idle
+    // animazioni: idle in loop; sparo/ricarica/estrazione una volta poi ritorno a idle
     this._gunMixer = mixer;
     this._gunClips = clips;
     this._gunIdle = idle;
     this._gunShoot = clips.find((c) => /shot|fire|shoot/i.test(c.name)) || null;
-    this._gunReload = clips.find((c) => /reload/i.test(c.name)) || null;
-    // la clip di ricarica mostra ~4 inserimenti ma il caricatore è 6: duplico 2 volte UN ciclo di
-    // caricamento e lo inserisco nella clip → 6 inserimenti VISIBILI. La finestra [1.10,2.47]s è un
-    // ciclo intero (contiene UN picco di inserimento ~2.43): inizio/fine sono poco DOPO un picco,
-    // cioè la STESSA fase del movimento → giunzione fluida (niente scatti come nel loop a runtime).
-    // La RIPRODUZIONE non cambia: _playGunAnim gira la clip (ora più lunga) in mag*shellTime; shellTime
-    // è alzato in config così la velocità del gesto (≈1.62×) resta IDENTICA a prima.
-    // _shellInsertTimes = gli istanti (s) di inserimento NELLA clip estesa: suono e +1 al caricatore
-    // scattano quando l'animazione li raggiunge (vedi update) → in fase col gesto, non su un timer.
+    // due ricariche autorali: "fast/tactical" (cambio caricatore, ce n'è ancora uno in canna) e
+    // "full/empty" (arma VUOTA: sblocco del carrello compreso). A caricatore vuoto startReload
+    // usa la full; nomenclatura per autore: Cransh "Reload_full", 1Matzh "Reload_Empty".
+    const reloads = clips.filter((c) => /reload/i.test(c.name));
+    this._gunReload = reloads.find((c) => !/full|empty/i.test(c.name)) || reloads[0] || null;
+    this._gunReloadFull = reloads.find((c) => /full|empty/i.test(c.name)) || null;
+    // estrazione (Draw/Equip, NON Unequip): riprodotta al cambio arma, poi idle.
+    this._gunDraw = clips.find((c) => /draw|(?<!un)equip/i.test(c.name)) || null;
+    // Solo per la ricarica a COLPO SINGOLO del fucile a pompa (def.shellReload): la clip mostra
+    // ~4 inserimenti ma il caricatore è 6 → duplico 2 volte UN ciclo di caricamento dentro la clip
+    // (finestra [1.10,2.47]s = un ciclo intero, giunzione alla stessa fase → fluida) e ricavo gli
+    // istanti di inserimento nella clip estesa (_shellInsertTimes: suono e +1 al caricatore
+    // scattano quando l'animazione li raggiunge, vedi update → in fase col gesto, non su un timer).
+    // _playGunAnim gira la clip estesa in mag*shellTime (shellTime in config tiene il gesto ≈1.62×).
     const RL_INS = [1.06, 2.43, 3.77, 5.07]; // inserimenti nella clip ORIGINALE (picchi mano al portello)
     const RL_T0 = 1.10, RL_T1 = 2.47, RL_COPIES = 2;
-    if (this._gunReload) {
+    if (def && def.shellReload && this._gunReload) {
       this._gunReload = this._extendReloadClip(this._gunReload, RL_T0, RL_T1, RL_COPIES);
       this._shellInsertTimes = this._extendedInsertTimes(RL_INS, RL_T0, RL_T1, RL_COPIES);
     }
     this._gunShootFit = entry.shootFit || 0.4;
     mixer.addEventListener('finished', () => this._playIdle());
     this._playIdle();
+    // estrazione al cambio arma: parte sopra l'idle appena impostato e vi ritorna da sola
+    if (this._gunDraw) {
+      const fit = Math.min(this._gunDraw.duration, 0.45);
+      this._playGunAnim(this._gunDraw, fit);
+      this.fireTimer = Math.max(this.fireTimer || 0, fit * 0.7); // niente sparo a metà estrazione
+    }
   }
 
   /**
@@ -481,7 +522,7 @@ export class Player {
     // escludi mani/guanti E il caricatore (che pende sotto): la bocca sta in alto sulla canna,
     // non al centro verticale dell'intera arma.
     this.gunMount.traverse((o) => {
-      // escludi mani/caricatore E le mesh nascoste (le parti del glock "in prestito" per le mani)
+      // escludi mani/caricatore E le mesh nascoste
       if (!o.isMesh || !o.visible || /hand|glove|mag/i.test(o.name) || !o.geometry) return;
       const g = o.geometry;
       if (!g.boundingBox) g.computeBoundingBox();
@@ -608,8 +649,8 @@ export class Player {
       .addScaledVector(R, vm.x + this._vmSwayX + bobX)
       .addScaledVector(U, vm.y + this._vmSwayY + bobY + rec * 0.03)
       .addScaledVector(F, vm.fwd - rec * 0.10);
-    // spostamento per-arma nel frame della camera (es. abbassa il KRISS così il gomito "tagliato"
-    // del braccio finisce sotto il bordo dello schermo).
+    // spostamento per-arma nel frame della camera (es. abbassa il fucile a pompa così volata e
+    // mani stanno sotto il centro dello schermo, vedi vmShift nel MANIFEST).
     const sh = this._vmShift;
     if (sh) _v1.addScaledVector(R, sh.x || 0).addScaledVector(U, sh.y || 0).addScaledVector(F, sh.z || 0);
     this.gunMount.position.set(this.pos.x + _v1.x, eyeY + _v1.y, this.pos.z + _v1.z);
@@ -755,9 +796,13 @@ export class Player {
       this.game.ui.reloading(true);
       return;
     }
-    this.reloadT = def.reload;
+    // a caricatore VUOTO usa la ricarica "full/empty" autorale (sblocco carrello compreso), un
+    // filo più lunga (def.reloadFull); col colpo in canna la "fast/tactical" (def.reload).
+    const empty = w.mag <= 0 && this._gunReloadFull;
+    const dur = empty ? (def.reloadFull || def.reload * 1.25) : def.reload;
+    this.reloadT = dur;
     Audio.play(RELOAD_SOUNDS[this.current] || 'reload_pistol', { vol: 0.85, pitchVar: 0.04 });
-    this._playGunAnim(this._gunReload, def.reload); // ricarica (caricatore), scalata sul tempo arma
+    this._playGunAnim(empty ? this._gunReloadFull : this._gunReload, dur); // gesto scalato sul tempo arma
     this.game.ui.reloading(true);
   }
 

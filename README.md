@@ -71,15 +71,17 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
 - **Corridore (9 animazioni: corsa/attacchi/morte/urlo)**: **"Zombie Fantasy Animated" di Larnox**
   ([Sketchfab](https://sketchfab.com/3d-models/zombie-fantasy-animated-4e966d5df4e54260b69487919dbe7660)) —
   **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
-- **Pistola (Glock-17 animata, clip sparo/ricarica)**: **"Glock-17 Animated (Free)" di BarcodeGames**
-  ([Sketchfab](https://sketchfab.com/3d-models/glock-17-animated-free-ab6ce788574147ce92b73d49915c123f)) —
+- **Pistola (viewmodel FPS animato: braccia+arma, ricariche tattica/completa)**:
+  **"FPS pistol animations" (Springfield XD Mod.2) di Cransh**
+  ([Sketchfab](https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d)) —
+  **CC BY 4.0** (attribuzione richiesta). Arma di raimeiyonke, mani FPS di DJMaesen (bumstrum).
+- **Mitra (viewmodel FPS animato, 8 clip)**: **"SMG FPS Animations" (MPA 30 SST) di Cransh**
+  ([Sketchfab](https://sketchfab.com/3d-models/smg-fps-animations-ca37ea9148dc4fcc9cc632175d311b23)) —
+  **CC BY 4.0** (attribuzione richiesta). Arma di eNse7en, mani FPS di DJMaesen (bumstrum).
+- **Magnum (viewmodel FPS animato: estrazione/sparo/ricarica/idle da timeline unica)**:
+  **"revolver animated" di bumstrum (DJMaesen)**
+  ([Sketchfab](https://sketchfab.com/3d-models/revolver-animated-a34b6d0ddc774744bc3567d6afc0878f)) —
   **CC BY 4.0** (attribuzione richiesta)
-- **Mitra (KRISS Vector animato, clip sparo/ricarica)**: **"Kriss Vector Animated (Free)" di BarcodeGames**
-  ([Sketchfab](https://sketchfab.com/3d-models/kriss-vector-animated-free-54530c888cfd4ae7aab3c3852b229c7e)) —
-  **CC BY 4.0** (attribuzione richiesta). Stesse mani guantate del Glock (stessa serie).
-- **Magnum (Mark 23 animato, clip sparo/ricarica)**: **"Mark 23 Animated (Free)" di BarcodeGames**
-  ([Sketchfab](https://sketchfab.com/3d-models/mark-23-animated-free-7abebe340aca4f46b36368417b3ca920)) —
-  **CC BY 4.0** (attribuzione richiesta). Stesse mani guantate del Glock (stessa serie).
 - **Fucile a pompa (viewmodel FPS animato: braccia+mani+arma, ricarica a colpo singolo)**:
   **"FPS Arms remington (shotgun)" di Cransh**
   ([Sketchfab](https://sketchfab.com/3d-models/fps-arms-remington-shotgun-e68ef617fe8a48cca8610d016ffd5881)) —

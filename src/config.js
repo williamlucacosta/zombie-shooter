@@ -103,8 +103,11 @@ export const WEAPONS = {
   // spread = cono di precisione base (gradi); bloom = gradi aggiunti a ogni colpo (rinculo) che
   // poi rientrano: il mirino circolare è dimensionato sullo spread EFFETTIVO (base+bloom) e i
   // proiettili partono in quel cono → cadono sempre dentro al cerchio.
-  pistol: {
-    id: 'pistol', slot: 1, name: 'PISTOLA', dmg: 14, rof: 0.21, mag: 12, reload: 1.0,
+  // reload = ricarica "fast/tactical" (cambio caricatore col colpo in canna); reloadFull = a
+  // caricatore VUOTO (clip autorale con sblocco del carrello, un filo più lunga). Le durate sono
+  // scelte vicine alla velocità autorale delle clip dei viewmodel (vedi assets.js MANIFEST.guns).
+  pistol: { // Springfield XD (clip autorali: Reload_easy 1.3s / Reload_full 1.6s → velocità 1:1)
+    id: 'pistol', slot: 1, name: 'PISTOLA', dmg: 14, rof: 0.21, mag: 12, reload: 1.3, reloadFull: 1.6,
     spread: 1.1, bloom: 1.2, speed: 96, pellets: 1, pierce: 0, reserve: Infinity, auto: false,
     knock: 1.6, tracer: 0xffd49a, shake: 0.07, light: 0xfff0c8,
   },
@@ -118,13 +121,13 @@ export const WEAPONS = {
     // è scelto così che mag*shellTime≈5.9s = quella clip a ~1.62× → STESSA velocità di gesto di prima.
     shellReload: true, shellTime: 0.98,
   },
-  smg: {
-    id: 'smg', slot: 3, name: 'MITRA', dmg: 8, rof: 0.082, mag: 34, reload: 1.6,
+  smg: { // MPA 30 SST (clip fast 3.95s / full 4.40s)
+    id: 'smg', slot: 3, name: 'MITRA', dmg: 8, rof: 0.082, mag: 34, reload: 2.0, reloadFull: 2.5,
     spread: 2.6, bloom: 0.9, speed: 104, pellets: 1, pierce: 0, reserve: 160, maxReserve: 260, auto: true,
     knock: 1.0, tracer: 0xffe0a4, shake: 0.05, light: 0xfff0cc,
   },
-  magnum: {
-    id: 'magnum', slot: 4, name: 'MAGNUM', dmg: 65, rof: 0.7, mag: 5, reload: 1.9,
+  magnum: { // Revolver bumstrum (finestra di ricarica unica ~2.1s nella timeline "allanims")
+    id: 'magnum', slot: 4, name: 'MAGNUM', dmg: 65, rof: 0.7, mag: 5, reload: 2.1,
     spread: 0.45, bloom: 3.2, speed: 120, pellets: 1, pierce: 3, reserve: 20, maxReserve: 35, auto: false,
     knock: 7.0, tracer: 0xfff1cc, shake: 0.2, light: 0xffe6c0,
   },

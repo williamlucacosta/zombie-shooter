@@ -23,7 +23,7 @@ Get-File "$pp/cf4368cf-b39e-4c9a-8a83-a9c637740eb8.glb" "$models\zombie_b.glb"  
 Get-File "$pp/02774147-cf49-4915-a70f-81ac5a8d625b.glb" "$models\zombie_c.glb"      # Big Arm (brute/boss)
 Get-File "$pp/77876445-e71a-4d5b-89c4-93653225a1d8.glb" "$models\zombie_d.glb"      # Zombie Half (crawler)
 Get-File "$pp/f11b6abc-28a4-4d23-bfce-679a8e2b9da1.glb" "$models\dog.glb"           # German Shepherd
-# (armi low-poly Quaternius rimosse: ora Glock/KRISS/Mark23/Remington 870 realistici, vedi README)
+# (armi low-poly Quaternius rimosse: ora 4 viewmodel FPS realistici da Sketchfab, vedi README)
 Get-File "$pp/1f4a7592-6157-4726-8159-49842c361f11.glb" "$models\barrel.glb"
 Get-File "$pp/ef0714ea-b808-423d-af60-e5aba72476b4.glb" "$models\crate.glb"         # Chest
 

@@ -22,3 +22,11 @@ public/assets/models/_candidates/
 
 # backup degli asset originali pre-compressione (tools/compress-assets.mjs)
 public/assets/_orig/
+
+# download grezzi Sketchfab dei viewmodel arma (7-18 MB, ri-scaricabili con
+# tools/sketchfab-dl.mjs; i file di gioco gun_*.glb nascono da tools/sf-gun-clean.mjs)
+public/assets/models/sf/pistol_cransh_xd.glb
+public/assets/models/sf/smg_cransh_mpa.glb
+public/assets/models/sf/magnum_bum_revolver.glb
+public/assets/models/sf/pistol_bum_heavy.glb
+public/assets/models/sf/sg_cransh_remington.glb

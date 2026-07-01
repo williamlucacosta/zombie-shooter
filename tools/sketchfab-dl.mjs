@@ -14,6 +14,16 @@ const MODELS = [
   // --- FUCILE A POMPA: viewmodel FPS animato (braccia+mani+arma, ricarica a colpo singolo) ---
   // "FPS Arms remington (shotgun)" di Cransh (CC-BY): è quello effettivamente usato nel gioco.
   { name: 'sg_cransh_remington', uid: 'e68ef617fe8a48cca8610d016ffd5881' }, // by "Cransh"
+  // --- MITRA: "SMG FPS Animations" di Cransh (CC-BY), MPA 30 SST, 8 clip ---
+  { name: 'smg_cransh_mpa', uid: 'ca37ea9148dc4fcc9cc632175d311b23' },
+  // --- PISTOLA: "FPS pistol animations" di Cransh (CC-BY), Springfield XD, 5 clip ---
+  // (la Makarov d02ebd58… e il Deagle 1Matzh 09a213d8… sono SCARTATI: la conversione
+  //  glTF di Sketchfab ha le ossa di braccia/arma in bind-pose esplosa in ogni clip)
+  { name: 'pistol_cransh_xd', uid: '0d7a343dcb6f401197a73c91aee93f6d' },
+  // --- MAGNUM: "revolver animated" di bumstrum/DJMaesen (CC-BY), timeline unica ---
+  { name: 'magnum_bum_revolver', uid: 'a34b6d0ddc774744bc3567d6afc0878f' },
+  // riserva pistola: "heavy pistol animated" di bumstrum (CC-BY), timeline unica
+  { name: 'pistol_bum_heavy', uid: 'b7c78c533ced40cd986c44594b778ed6' },
 ];
 const OUT = 'public/assets/models/sf';
 
