@@ -23,6 +23,10 @@ export class UI {
       loadingWrap: $('loading-wrap'), loadingFill: $('loading-fill'), loadingLabel: $('loading-label'), tutorial: $('tutorial'),
       btnPlay: $('btn-play'), btnRestart: $('btn-restart'), btnResume: $('btn-resume'), btnQuit: $('btn-quit'),
       menuRecord: $('menu-record'),
+      // co-op
+      coop: $('coop'), btnHost: $('btn-host'), btnJoinToggle: $('btn-join-toggle'),
+      coopHost: $('coop-host'), coopCode: $('coop-code'), coopHostStatus: $('coop-host-status'),
+      coopJoin: $('coop-join'), coopInput: $('coop-input'), btnJoinGo: $('btn-join-go'), coopJoinStatus: $('coop-join-status'),
     };
     this._bannerT = null;
     this._toastT = null;
@@ -40,6 +44,7 @@ export class UI {
     this.el.tutorial.style.display = 'none'; // il tutorial esiste solo durante il caricamento
     this.el.btnPlay.style.display = '';
     this.el.btnOptions.style.display = ''; // la rondella compare solo a risorse caricate
+    this.el.coop.style.display = 'flex';   // il co-op è disponibile a risorse caricate
     this.el.menuRecord.textContent = best > 0 ? `RECORD: ${best.toLocaleString('it-IT')}` : '';
   }
 

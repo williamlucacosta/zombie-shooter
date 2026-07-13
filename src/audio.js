@@ -25,6 +25,12 @@ export const AUDIO_MANIFEST = {
   // (BigSoundBank "pistolet, chargement" CC0) rifinito con un filo di corpo grave, 2 varianti
   // (vedi tools/make-shotgun-shell.mjs). Sostituisce il "pump" ripetuto, prima sintetizzato.
   shotgun_insert: ['shotgun_insert_1.ogg', 'shotgun_insert_2.ogg'],
+  // ricarica del revolver in fase col gesto (vedi tools/make-magnum-cylinder.mjs, sorgenti CC0
+  // BigSoundBank): sgancio del tamburo, click di ogni proiettile nel tamburo (2 varianti),
+  // scatto secco della chiusura. Scattano ai tempi di config.WEAPONS.magnum.reloadEvents.
+  magnum_open: ['magnum_open.ogg'],
+  magnum_insert: ['magnum_insert_1.ogg', 'magnum_insert_2.ogg'],
+  magnum_close: ['magnum_close.ogg'],
   slam: ['slam.ogg'],
   heartbeat: ['heartbeat.ogg'],
   pickup: ['pickup.ogg'],
@@ -41,6 +47,8 @@ export const AUDIO_MANIFEST = {
   // pitch leggermente variato + volume medio-basso sono impostati al call site in enemies.js.
   zombie_hit: ['splat.ogg', 'zombie_hit_1.ogg'],
   crit: ['crit.ogg'],
+  // colpo alla testa: crack del cranio + snap osseo (CC0), distinto dall'impatto normale
+  headshot: ['headshot.ogg'],
   splat: ['splat.ogg'],
   spit: ['spit.ogg'],
   hurt: ['hurt_1.ogg', 'hurt_2.ogg', 'hurt_3.ogg'],
@@ -273,7 +281,10 @@ class AudioEngine {
   }
 
   synth(name, vol = 1, rate = 1, pan = 0) {
-    const alias = { reload_pistol: 'reload', reload_rifle: 'reload', shotgun_pump: 'reload' };
+    const alias = {
+      reload_pistol: 'reload', reload_rifle: 'reload', shotgun_pump: 'reload',
+      magnum_open: 'click', magnum_insert: 'click', magnum_close: 'reload', // ripieghi synth
+    };
     name = alias[name] || name;
     const t = this.ctx.currentTime;
     const v = vol;

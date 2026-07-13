@@ -9,6 +9,7 @@ export class Input {
     this.mousePix = { x: innerWidth / 2, y: innerHeight / 2 };
     this.mouseDown = false;
     this.mousePressed = false;
+    this.rightDown = false; // tasto destro tenuto premuto (mira ADS in FPS)
     this.wheelDelta = 0;
     // mouse-look in prima persona (pointer lock)
     this.pointerLocked = false;
@@ -23,7 +24,7 @@ export class Input {
       if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; this.rightDown = false; });
 
     addEventListener('mousemove', (e) => {
       if (this.pointerLocked) {
@@ -38,17 +39,21 @@ export class Input {
       this.mouseNDC.y = -(e.clientY / innerHeight) * 2 + 1;
     });
     domElement.addEventListener('mousedown', (e) => {
+      if (e.button === 2) { this.rightDown = true; return; } // tasto destro = mira ADS
       if (e.button !== 0) return;
       // in FPS un click serve ad agganciare il puntatore: non spara
       if (this.wantLock && !this.pointerLocked) { this.dom.requestPointerLock?.(); return; }
       this.mouseDown = true; this.mousePressed = true;
     });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; });
+    addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.mouseDown = false;
+      if (e.button === 2) this.rightDown = false;
+    });
     addEventListener('wheel', (e) => { this.wheelDelta += Math.sign(e.deltaY); }, { passive: true });
     domElement.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('pointerlockchange', () => {
       this.pointerLocked = document.pointerLockElement === this.dom;
-      if (!this.pointerLocked) this.mouseDown = false;
+      if (!this.pointerLocked) { this.mouseDown = false; this.rightDown = false; }
     });
   }
 

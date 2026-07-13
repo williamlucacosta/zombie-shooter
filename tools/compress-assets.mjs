@@ -27,8 +27,11 @@ const FFMPEG = 'C:\\program files\\ffmpeg\\bin\\ffmpeg.exe';
 const MODELS = [
   { src: 'models/player_soldier.glb' },
   { src: 'models/zombie_hazmat.glb' },
-  { src: 'models/sf/zombie_aiden.glb' },
-  { src: 'models/sf/zombie_larnox.glb' },
+  // Orda realistica coerente (temptecn/DanteGuy, CC-BY, low-poly): walker/runner/crawler/brute
+  { src: 'models/sf/zombie_slow1.glb' },
+  { src: 'models/sf/zombie_putrid.glb' },
+  { src: 'models/sf/zombie_crawler.glb' },
+  { src: 'models/sf/zombie_chainsaw.glb' },
   { src: 'models/sf/wolf_3dhaupt.glb' },
   { src: 'models/zombie_a.glb' },
   { src: 'models/zombie_b.glb' },
@@ -46,6 +49,30 @@ const MODELS = [
   { src: 'models/gun_pistol_xd.glb', noQuant: true },
   { src: 'models/gun_smg_mpa.glb', noQuant: true },
   { src: 'models/gun_magnum_revolver.glb', noQuant: true },
+  // città abbandonata: relitti e arredo urbano STATICI (nessun rig) -> meshopt pieno. Sono decor
+  // di SFONDO (spesso lontani/in alto): texture a 512 invece di 1024 → ~4× più leggere (dominavano
+  // il caricamento: il bus aveva 14 texture @1024 = 24 MB con geometria di soli 2,4 MB).
+  { src: 'models/sf/car_police.glb', texSize: 512 },
+  { src: 'models/sf/car_crashed.glb', texSize: 512 },
+  { src: 'models/sf/car_sedan.glb', texSize: 512 },
+  { src: 'models/sf/car_bmw.glb', texSize: 512 },
+  { src: 'models/sf/car_hudson.glb', texSize: 512 },
+  { src: 'models/sf/bus_destroyed.glb', texSize: 512 },
+  { src: 'models/sf/prop_streetlight.glb', texSize: 512 },
+  { src: 'models/sf/prop_dumpster.glb', texSize: 512 },
+  { src: 'models/sf/prop_jersey.glb', texSize: 512 },
+  // vestizione premium: rovine (2 pack multi-lotto), elicottero crashato, checkpoint militare
+  { src: 'models/sf/ruin_pack.glb', texSize: 1024 },   // facciate grandi: 512 slavava troppo
+  { src: 'models/sf/ruin_city.glb', texSize: 1024 },
+  { src: 'models/sf/heli_crashed.glb', texSize: 512 },
+  { src: 'models/sf/prop_sandbags.glb', texSize: 512 },
+  { src: 'models/sf/prop_watchtower.glb', texSize: 512 },
+  { src: 'models/sf/prop_debris.glb', texSize: 512 },
+  { src: 'models/sf/truck_m725.glb', texSize: 512 },
+  // mappa FORESTA: pini instanziati (foliage in alpha: texture a 1024), capanna e capanno
+  { src: 'models/sf/pines_scots.glb', texSize: 1024 },
+  { src: 'models/sf/cabin_wood.glb', texSize: 1024 },
+  { src: 'models/sf/shed_old.glb', texSize: 512 },
   // .gltf+.bin+texture esterne -> un singolo .glb autosufficiente (cambia l'URL nel manifest)
   { src: 'models/mutant/a.gltf', dst: 'models/mutant/a.glb' },
   { src: 'models/ph/boulder_01/boulder_01_1k.gltf', dst: 'models/ph/boulder_01/boulder_01_1k.glb' },
@@ -61,6 +88,8 @@ const MODELS = [
 // set PBR standalone (.jpg) usati dai terreni/muri delle zone -> .webp stessa risoluzione.
 const TEX_BASES = [
   'ph_forrest_ground_01', 'ph_cobblestone_floor_08', 'ph_rock_wall_10', 'ph_weathered_planks',
+  // città abbandonata: asfalto, marciapiedi e facciate dei palazzi
+  'ph_asphalt_02', 'ph_rectangular_paving', 'ph_brick_wall_04', 'ph_plastered_wall_04', 'ph_concrete_panels',
 ];
 const TEX_SUFFIXES = ['diff', 'nor_gl', 'rough'];
 const TEX_SINGLE = ['ground']; // ground.jpg dell'hub
@@ -112,7 +141,7 @@ function compressModels(filter) {
       gltf(['optimize', src, tmp,
         '--compress', m.noQuant ? 'false' : 'meshopt', // noQuant: niente quantizzazione (preserva la bind-pose)
         '--texture-compress', 'webp',
-        '--texture-size', '1024',
+        '--texture-size', String(m.texSize || 1024),
         '--simplify', 'false', '--join', 'false', '--flatten', 'false',
         '--instance', 'false', '--palette', 'false']);
       renameRetry(tmp, out);

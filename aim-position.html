@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NOTTE DELL'ORDA — Posizione arma / mira</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🎯</text></svg>" />
+  <style>
+    :root { --blood:#c41e1e; --bone:#e8e0cc; --toxic:#8aff5a; --amber:#ffb84d; --panel:#0c0a12; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html,body { height:100%; background:#07060b; color:var(--bone); font-family:'Segoe UI',Roboto,sans-serif; overflow:hidden; }
+    #stage { position:absolute; inset:0; }
+    #viewport { position:absolute; inset:0; }
+    #viewport canvas { display:block; width:100%; height:100%; }
+    /* mirino al centro */
+    #cross { position:absolute; left:50%; top:50%; width:22px; height:22px; transform:translate(-50%,-50%); pointer-events:none; z-index:5; }
+    #cross::before, #cross::after { content:''; position:absolute; background:rgba(255,80,60,.9); }
+    #cross::before { left:50%; top:0; width:2px; height:100%; transform:translateX(-50%); }
+    #cross::after { top:50%; left:0; height:2px; width:100%; transform:translateY(-50%); }
+    #cross i { position:absolute; left:50%; top:50%; width:6px; height:6px; border-radius:50%; background:rgba(255,80,60,.95); transform:translate(-50%,-50%); }
+
+    #loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#9aa3b8; font-size:15px; letter-spacing:.12em; z-index:9; }
+
+    /* pannello controlli */
+    #panel { position:absolute; top:16px; left:16px; width:330px; background:rgba(10,8,16,.86); border:1px solid #2a2238; border-radius:10px;
+             padding:14px 15px 16px; backdrop-filter:blur(4px); z-index:6; }
+    #panel h1 { font-size:16px; color:var(--blood); letter-spacing:.03em; }
+    #panel h1 small { display:block; color:#71798c; font-size:9.5px; letter-spacing:.22em; margin-top:2px; }
+    .hint { font-size:11px; color:#8b94a8; line-height:1.5; margin:8px 0 12px; }
+    .row { display:flex; gap:6px; margin-bottom:10px; }
+    .wbtn { flex:1; text-align:center; background:#14111c; border:1px solid #2a2238; border-radius:6px; color:#cfd6e6;
+            padding:7px 4px; cursor:pointer; font-size:12px; transition:background .12s,border-color .12s; }
+    .wbtn:hover { background:#1f1830; border-color:#5a4470; }
+    .wbtn.active { background:#2a1c10; border-color:var(--amber); color:#ffe6b8; }
+    .wbtn small { display:block; font-size:9px; color:#7d8598; margin-top:2px; }
+
+    .modes { display:flex; gap:6px; margin-bottom:12px; }
+    .mode { flex:1; text-align:center; background:#14111c; border:1px solid #2a2238; border-radius:6px; color:#cfd6e6; padding:6px; cursor:pointer; font-size:12px; }
+    .mode.active { background:#0e2438; border-color:#7ec8ff; color:#bfe4ff; }
+
+    .grp2 { font-size:10px; letter-spacing:.16em; color:#7ec8ff; margin:4px 0 8px; border-top:1px solid #223; padding-top:9px; }
+    .sld { margin-bottom:11px; }
+    .sld label { display:flex; justify-content:space-between; font-size:11.5px; color:#aab2c4; margin-bottom:3px; }
+    .sld label b { color:var(--amber); font-variant-numeric:tabular-nums; }
+    .sld input[type=range] { width:100%; accent-color:var(--amber); }
+
+    .acts { display:flex; gap:6px; margin-top:6px; }
+    .act { flex:1; text-align:center; background:#14111c; border:1px solid #2a2238; border-radius:6px; color:#cfd6e6; padding:7px; cursor:pointer; font-size:11.5px; }
+    .act:hover { background:#1f1830; border-color:#5a4470; }
+    #out { margin-top:11px; font-family:ui-monospace,Consolas,monospace; font-size:10.5px; color:#9fe0b0; background:#0a1410;
+           border:1px solid #1e3a24; border-radius:6px; padding:8px 10px; white-space:pre-wrap; line-height:1.5; max-height:150px; overflow:auto; }
+    #help { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:11px; color:#8b94a8;
+            background:rgba(10,8,16,.7); border:1px solid #2a2238; border-radius:8px; padding:7px 14px; z-index:6; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="viewport"></div>
+    <div id="cross"><i></i></div>
+    <div id="loading">caricamento armi…</div>
+    <div id="panel">
+      <h1>POSIZIONE ARMA / MIRA <small>NOTTE DELL'ORDA</small></h1>
+      <div class="hint">Scegli l'arma (o tasti <b>1 2 3 4</b>), scegli <b>FIANCHI</b> o <b>MIRA</b>, e sposta braccia+arma con gli slider (X = lato, Y = alto/basso, Z = avanti). I valori si salvano da soli e si applicano <b>subito in gioco</b>.</div>
+      <div class="row" id="weapons"></div>
+      <div class="modes">
+        <div class="mode" data-mode="hip">FIANCHI</div>
+        <div class="mode active" data-mode="ads">MIRA (ADS)</div>
+      </div>
+      <div class="sld"><label>X — lato <b id="vx">0</b></label><input type="range" id="sx" min="-0.6" max="0.6" step="0.005"></div>
+      <div class="sld"><label>Y — alto/basso <b id="vy">0</b></label><input type="range" id="sy" min="-0.6" max="0.6" step="0.005"></div>
+      <div class="sld"><label>Z — avanti <b id="vz">0</b></label><input type="range" id="sz" min="0.1" max="1.2" step="0.005"></div>
+      <div class="grp2">ROTAZIONE (gradi)</div>
+      <div class="sld"><label>rot X — inclina su/giù <b id="vrx">0</b></label><input type="range" id="srx" min="-45" max="45" step="0.5"></div>
+      <div class="sld"><label>rot Y — gira sx/dx <b id="vry">0</b></label><input type="range" id="sry" min="-45" max="45" step="0.5"></div>
+      <div class="sld"><label>rot Z — rolla <b id="vrz">0</b></label><input type="range" id="srz" min="-45" max="45" step="0.5"></div>
+      <div class="acts">
+        <div class="act" id="reset">Reset arma</div>
+        <div class="act" id="copy">Copia valori</div>
+      </div>
+      <div id="out">—</div>
+    </div>
+    <div id="help">🖱️ trascina per guardarti attorno · le modifiche sono già attive nel gioco</div>
+  </div>
+  <script type="module" src="/src/aim-position.js"></script>
+</body>
+</html>

@@ -67,6 +67,29 @@
       background: linear-gradient(180deg, #3a0d0d, #1d0606); box-shadow: 0 0 16px rgba(196,30,30,.4); }
     #diff-desc { font-size: 12px; color: #8b94a8; font-style: italic; height: 16px; letter-spacing: .08em; }
 
+    /* CO-OP: ospita / entra in una stanza (P2P) */
+    #coop { display: none; flex-direction: column; align-items: center; gap: 10px; margin: 6px 0 2px; }
+    .coop-row { display: flex; gap: 10px; }
+    .btn-sm { font-family: 'Horror', 'Chiller', cursive; font-size: 20px; letter-spacing: .08em; color: #9aa3b8;
+      background: rgba(20,12,16,.7); border: 1px solid #3a2630; border-radius: 5px; padding: 7px 26px; cursor: pointer;
+      transition: color .15s, border-color .15s, box-shadow .2s, background .2s; }
+    .btn-sm:hover { color: var(--bone); border-color: #7e2222; }
+    .btn-sm.active { color: var(--bone); border-color: var(--blood); background: linear-gradient(180deg,#3a0d0d,#1d0606); }
+    .coop-panel { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 22px; min-width: 300px;
+      background: rgba(12,8,12,.72); border: 1px solid #33242e; border-radius: 8px; }
+    .coop-panel.hidden { display: none; }
+    .coop-label { font-size: 11px; letter-spacing: .25em; color: #71798c; text-transform: uppercase; }
+    .coop-code { font-family: 'Horror','Chiller',cursive; font-size: 40px; letter-spacing: .3em; color: var(--amber);
+      text-shadow: 0 0 22px rgba(255,150,60,.5); cursor: pointer; user-select: all; }
+    .coop-code:hover { color: var(--bone); }
+    .coop-status { font-size: 12px; color: #8b94a8; font-style: italic; letter-spacing: .06em; min-height: 15px; }
+    .coop-status.ok { color: #7ad08a; font-style: normal; }
+    .coop-status.err { color: #d86b6b; font-style: normal; }
+    .coop-input { font-family: 'Horror','Chiller',cursive; font-size: 30px; letter-spacing: .28em; text-align: center;
+      text-transform: uppercase; width: 220px; color: var(--bone); background: rgba(0,0,0,.5);
+      border: 1px solid #3a2630; border-radius: 6px; padding: 6px 10px; outline: none; }
+    .coop-input:focus { border-color: var(--blood); box-shadow: 0 0 14px rgba(196,30,30,.35); }
+
     /* tutorial: mostrato SOLO durante il caricamento, stile "keycap" */
     #tutorial { display: flex; flex-direction: column; align-items: center; gap: 16px; margin: 8px 0 4px;
       animation: tutIn .6s ease both; }
@@ -200,9 +223,9 @@
 
     /* crosshair circolare: anello sottile + punto centrale, stile "premium" discreto (soft, poco
        invadente). Un filo di drop-shadow scuro lo rende leggibile anche sui fondi chiari. */
-    #crosshair { position: fixed; width: 24px; height: 24px; margin: -12px 0 0 -12px; pointer-events: none; z-index: 30; opacity: 0; box-sizing: border-box; border: 1px solid rgba(255,244,232,.34); border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,.4); transition: opacity .25s; }
+    #crosshair { position: fixed; width: 24px; height: 24px; margin: -12px 0 0 -12px; pointer-events: none; z-index: 30; opacity: 0; box-sizing: border-box; border: 1.5px solid rgba(255,246,236,.6); border-radius: 50%; box-shadow: 0 0 2px rgba(0,0,0,.55); transition: opacity .25s; }
     #crosshair.visible { opacity: 1; }
-    #crosshair .dot { position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; margin: -1px 0 0 -1px; border-radius: 50%; background: rgba(255,246,236,.78); box-shadow: 0 0 2px rgba(0,0,0,.55); }
+    #crosshair .dot { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: rgba(255,248,238,.95); box-shadow: 0 0 2px rgba(0,0,0,.6); }
 
     /* full-screen feedback */
     #damage-flash { position: fixed; inset: 0; pointer-events: none; z-index: 25; opacity: 0;
@@ -288,6 +311,7 @@
         <div class="tut-item"><span class="keycap">R</span> Ricarica</div>
         <div class="tut-item"><span class="keycap">1 – 4</span> Cambia arma</div>
         <div class="tut-item"><span class="keycap">V</span> Cambia visuale</div>
+        <div class="tut-item"><span class="keycap">F</span> Torcia</div>
         <div class="tut-item"><span class="keycap">E</span> Apri porte ✦</div>
         <div class="tut-item"><span class="keycap">Esc</span> Pausa</div>
       </div>
@@ -295,6 +319,23 @@
     <div class="loading-bar" id="loading-wrap"><div id="loading-fill"></div></div>
     <div id="loading-label">Caricamento risorse…</div>
     <button id="btn-play" class="btn" style="display:none">GIOCA</button>
+    <div id="coop">
+      <div class="coop-row">
+        <button id="btn-host" class="btn-sm">OSPITA CO-OP</button>
+        <button id="btn-join-toggle" class="btn-sm">ENTRA IN STANZA</button>
+      </div>
+      <div id="coop-host" class="coop-panel hidden">
+        <div class="coop-label">Codice stanza — dàllo all'amico (clicca per copiare)</div>
+        <div id="coop-code" class="coop-code">·····</div>
+        <div id="coop-host-status" class="coop-status">In attesa dell'amico…</div>
+      </div>
+      <div id="coop-join" class="coop-panel hidden">
+        <div class="coop-label">Inserisci il codice della stanza</div>
+        <input id="coop-input" class="coop-input" maxlength="5" placeholder="·····" autocomplete="off" spellcheck="false">
+        <button id="btn-join-go" class="btn-sm">CONNETTI</button>
+        <div id="coop-join-status" class="coop-status"></div>
+      </div>
+    </div>
     <div class="record" id="menu-record"></div>
   </div>
 

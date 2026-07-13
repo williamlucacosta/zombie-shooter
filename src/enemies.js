@@ -4,13 +4,14 @@
 
 import * as THREE from 'three';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
-import { getCharacter, makeProceduralZombie, Animator } from './assets.js';
+import { getCharacter, makeProceduralZombie, Animator, pickSkin } from './assets.js';
 import { CONFIG, ENEMY_TYPES, waveComposition, WEAPON_UNLOCKS, DIFF, depthMods } from './config.js';
 import { Audio } from './audio.js';
 
 const ARENA_R = CONFIG.arenaRadius;
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+const _white = new THREE.Color(1, 1, 1);
 
 // Confinamento dell'area giocabile: di default il cerchio dell'hub, sostituito dal
 // sistema a stanze (world.confine) appena il mondo è costruito (setConfine in main.js).
@@ -20,16 +21,66 @@ let _confine = (pos, radius) => {
 };
 export function setConfine(fn) { _confine = fn; }
 
+// GRIGLIA SPAZIALE per i colliders (statici dopo il build): risolvere le collisioni scorrendo
+// TUTTI i ~200 colliders per OGNI nemico E il giocatore, a ogni frame, era il vero costo di CPU
+// del gameplay (O(entità × colliders)). Bucketizziamo i colliders in celle una volta sola e
+// interroghiamo solo le celle vicine → O(entità × colliders_locali). La cache è legata all'array
+// (WeakMap) e si rigenera solo se cambia lunghezza (aggiunte a runtime rarissime). Comportamento
+// identico: la finestra di query copre 2×(raggio+maxR) così nessun collider utile viene mai perso.
+const _gridCache = new WeakMap();
+const CELL = 4;
+function _cellKey(ix, iz) { return (ix + 1024) * 2048 + (iz + 1024); }
+function colliderGrid(colliders) {
+  let g = _gridCache.get(colliders);
+  if (g && g.len === colliders.length) return g;
+  const cells = new Map();
+  let maxR = 0;
+  for (const c of colliders) {
+    if (c.r > maxR) maxR = c.r;
+    const key = _cellKey(Math.floor(c.x / CELL), Math.floor(c.z / CELL));
+    let arr = cells.get(key);
+    if (!arr) cells.set(key, arr = []);
+    arr.push(c);
+  }
+  g = { len: colliders.length, cells, maxR };
+  _gridCache.set(colliders, g);
+  return g;
+}
+
 /** Spinge fuori una posizione 2D da colliders circolari e dal confine dell'area. */
 export function resolveCollisions(pos, radius, colliders) {
-  for (const c of colliders) {
-    const dx = pos.x - c.x, dz = pos.z - c.z;
-    const min = radius + c.r;
-    const d2 = dx * dx + dz * dz;
-    if (d2 < min * min && d2 > 1e-6) {
-      const d = Math.sqrt(d2);
-      pos.x = c.x + (dx / d) * min;
-      pos.z = c.z + (dz / d) * min;
+  if (colliders.length > 24) {
+    const g = colliderGrid(colliders);
+    // 2×reach: la posizione può SPOSTARSI durante i push, quindi allarghiamo la finestra così un
+    // collider che diventa rilevante dopo uno spostamento resta comunque nelle celle interrogate.
+    const range = Math.ceil((2 * (radius + g.maxR)) / CELL) + 1;
+    const cx = Math.floor(pos.x / CELL), cz = Math.floor(pos.z / CELL);
+    for (let ix = cx - range; ix <= cx + range; ix++) {
+      for (let iz = cz - range; iz <= cz + range; iz++) {
+        const arr = g.cells.get(_cellKey(ix, iz));
+        if (!arr) continue;
+        for (const c of arr) {
+          const dx = pos.x - c.x, dz = pos.z - c.z;
+          const min = radius + c.r;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < min * min && d2 > 1e-6) {
+            const d = Math.sqrt(d2);
+            pos.x = c.x + (dx / d) * min;
+            pos.z = c.z + (dz / d) * min;
+          }
+        }
+      }
+    }
+  } else {
+    for (const c of colliders) {
+      const dx = pos.x - c.x, dz = pos.z - c.z;
+      const min = radius + c.r;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < min * min && d2 > 1e-6) {
+        const d = Math.sqrt(d2);
+        pos.x = c.x + (dx / d) * min;
+        pos.z = c.z + (dz / d) * min;
+      }
     }
   }
   _confine(pos, radius);
@@ -49,14 +100,26 @@ export class Enemy {
     const eliteMult = this.elite ? 2.6 : 1;
     // --- variazione individuale: ogni non morto comune ha corporatura, andatura, voce e
     //     tonalità un po' diverse, così l'orda non sembra fatta di cloni identici. ---
-    const build = b ? 1 : (0.86 + Math.random() * 0.30);  // mingherlino .. grosso
+    // corporatura: variazione di TAGLIA contenuta (l'altezza non deve spaziare troppo); la varietà
+    // vera dell'orda viene dalle 3 varianti pre-bakate di geometria del walker (vedi assets/models).
+    const build = b ? 1 : (0.93 + Math.random() * 0.14);  // ~±7%
     this.voicePitch = b ? 0.7 : (0.82 + Math.random() * 0.4);
     this.lurchPhase = Math.random() * Math.PI * 2;
     this.lurchFreq = 3.5 + Math.random() * 3.5;
     this.lurchAmp = b ? 0 : (0.02 + Math.random() * 0.06); // barcollio laterale del corpo (rad)
     this.weavePhase = Math.random() * Math.PI * 2;
     this.weaveFreq = 0.8 + Math.random() * 1.4;
-    this.weaveAmt = (b || Math.random() < 0.45) ? 0 : (0.12 + Math.random() * 0.32); // ~metà ondeggia
+    this.weaveAmt = (b || typeDef.noWeave || Math.random() < 0.45) ? 0 : (0.12 + Math.random() * 0.32); // ~metà ondeggia
+    // FIANCHEGGIAMENTO: non tutti dritti addosso in trenino — a distanza una parte dell'orda
+    // APRE l'angolo d'attacco (ti aggira ai lati, i veloci più larghi) e converge solo sotto
+    // i ~5 m → il gruppo si sparpaglia e ti CHIUDE da direzioni diverse. L'angolo viene
+    // ri-estratto ogni tot secondi: le traiettorie cambiano e non impari il pattern.
+    this._rollFlank = () => {
+      this.flank = (b || Math.random() < 0.35) ? 0
+        : (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.9) * (typeDef.speed > 4 ? 1.25 : 1);
+      this.flankT = 5 + Math.random() * 6;
+    };
+    this._rollFlank();
 
     this.maxHp = (b ? b.hp * (b.hpLoopMult || 1) : typeDef.hp * eliteMult) * mods.hpMult;
     this.hp = this.maxHp;
@@ -79,6 +142,12 @@ export class Enemy {
     const visScale = (b ? b.scale : typeDef.scale) * (this.elite ? 1.18 : 1) * build;
     let modelNames = typeDef.models || [];
     if (mods.wave >= 6 && typeDef.lateModels && Math.random() < 0.4) modelNames = typeDef.lateModels;
+    // varianti pre-bakate (geometria+colore): il walker sceglie a caso l'originale o una delle
+    // N varianti "<base>_vK" (generate in assets.makeGeoVariants). Ripiego sull'originale se assente.
+    if (!b && typeDef.variants && modelNames.length) {
+      const k = (Math.random() * (typeDef.variants + 1)) | 0; // 0 = originale, 1..N = variante
+      if (k > 0) modelNames = [`${modelNames[0]}_v${k}`, ...modelNames];
+    }
     const entry = b ? getCharacter(b.model, ...modelNames) : getCharacter(...modelNames);
 
     this.root = new THREE.Group();
@@ -97,38 +166,52 @@ export class Enemy {
       this.anim = new Animator(this.model, []);
       this.procedural = true;
     }
-    // sollevamento da steso a terra: ribaltando il corpo attorno ai piedi la "schiena" (z minimo
-    // in coordinate LOCALI del modello) finirebbe sotto il pavimento. Misuro QUI, col modello ancora
-    // SENZA parent (matrixWorld = solo scala/rotazione locali), così il valore non dipende dalla
-    // posizione di spawn; di tanto alzo il corpo da disteso per farlo appoggiare invece di sprofondare.
+    // Misuro il bounding box del modello (posa di riposo, SENZA parent → matrixWorld = solo
+    // scala/rotazione locali): serve a piantare i piedi e a dimensionare l'hitbox della testa.
     this.model.updateMatrixWorld(true);
-    this._lieLift = THREE.MathUtils.clamp(-new THREE.Box3().setFromObject(this.model).min.z, 0.1, 0.7);
+    const _mbox = new THREE.Box3().setFromObject(this.model);
+    // PIANTA I PIEDI A TERRA: non tutti i modelli hanno l'origine ai piedi — il brute motosega ce
+    // l'ha al bacino (min.y ≈ -1.2 m) e lo strisciante al centro → con position.y=0 sprofondavano.
+    // Alzo il modello di -min.y così il punto più basso poggia sull'origine del root (= terreno).
+    this._footLift = -_mbox.min.y;
+    this.model.position.y = this._footLift;
+    // ribaltamento da morto (per i modelli senza clip di morte): quanto alzare il corpo disteso
+    // così la "schiena" (z minimo locale) non buchi il pavimento.
+    this._lieLift = THREE.MathUtils.clamp(-_mbox.min.z, 0.1, 0.7);
+    // sfera-testa per i colpi alla testa: centro a headFrac dell'altezza PIENA del modello (piedi
+    // a terra), non di _mbox.max.y — che con l'origine al bacino misura solo la metà superiore e
+    // metteva l'hitbox testa del brute troppo in basso. I profili bassi (cane/strisciante) hanno la
+    // "testa" davanti in basso → centro più in basso, raggio più ampio.
+    const standH = Math.max(0.6, _mbox.max.y - _mbox.min.y);
+    this.headY = this.def.lowProfile ? standH * 0.62 : standH * CONFIG.headFrac;
+    this.headR = CONFIG.headRadius * (this.def.lowProfile ? 1.35 : 1) * (0.85 + visScale * 0.18);
 
     this.root.add(this.model);
 
-    // ---- tinta tematica dell'ondata (+ sfumatura individuale) ----
+    // ---- veste dell'ondata: PELLE PRE-LAVORATA (noise bake) + grade tenue ----
+    // La varietà vera viene dalle TEXTURE variate (assets.SKIN_FLAVORS: putrefatto, esangue,
+    // carbonizzato, insanguinato — pre-applicate con strati di rumore, scelte col bias del tema
+    // d'ondata) e dalle varianti di geometria. La vecchia tinta HSL piena ricolorava i modelli
+    // come pupazzi di plastica: ora resta solo un GRADE tenue verso la palette del tema (~25%)
+    // più una variazione individuale di solo VALORE (chi più chiaro, chi più scuro).
     const theme = mods.theme;
     const tint = new THREE.Color(b ? b.tint : theme.tint);
     const emissive = new THREE.Color(b ? b.emissive : theme.emissive);
     let glow = (b ? b.glow : theme.glow) * (this.elite ? 1.8 : 1);
     if (!b) {
-      // ogni zombi una sfumatura diversa DENTRO la palette dell'ondata: chi più chiaro/scuro,
-      // chi più verdognolo/grigiastro -> l'orda smette di sembrare un blocco unico.
-      const hsl = { h: 0, s: 0, l: 0 };
-      tint.getHSL(hsl);
-      tint.setHSL(
-        (hsl.h + (Math.random() - 0.5) * 0.06 + 1) % 1,
-        THREE.MathUtils.clamp(hsl.s * (0.7 + Math.random() * 0.6), 0, 1),
-        THREE.MathUtils.clamp(hsl.l * (0.72 + Math.random() * 0.5), 0, 1),
-      );
-      glow *= 0.65 + Math.random() * 0.7;
+      tint.lerp(_white, 0.74);                          // grade: 26% del tema, non ricolorazione
+      tint.multiplyScalar(0.86 + Math.random() * 0.24); // valore individuale (niente virate di tinta)
+      glow *= (0.65 + Math.random() * 0.7) * 0.6;       // l'emissivo tematico resta, ma discreto
     }
+    const skinTex = this.procedural ? null
+      : pickSkin(modelNames[0] || '', b ? b.skin : theme.skin, !!b);
     this.mats = [];
     const matMap = new Map();
     this.model.traverse((o) => {
       if (o.isMesh && o.material && o.material.isMeshStandardMaterial) {
         if (!matMap.has(o.material)) {
           const m = o.material.clone();
+          if (skinTex && m.map) m.map = skinTex; // pelle variata pre-bakata (se già generata)
           m.color.multiply(tint);
           m.emissive.copy(emissive);
           m.emissiveIntensity = glow;
@@ -149,11 +232,17 @@ export class Enemy {
       if (emissive.getHex() === 0) eyeMat.color.set(0xffcc66);
     }
 
-    // luce personale del boss
+    // luce personale del boss: presa dal POOL (game.bossLight, creata al build). ⚠️ MAI
+    // crearne una nuova qui: aggiungere una PointLight a runtime ricompila TUTTI i materiali
+    // della scena → freeze di 5-10 s all'inizio del round boss.
     if (b) {
-      this.bossLight = new THREE.PointLight(b.tint, 3.2, 12, 1.8);
-      this.bossLight.position.y = 2.4 * visScale;
-      this.root.add(this.bossLight);
+      this.bossLight = game.bossLight || null;
+      this._bossLightY = 2.4 * visScale;
+      if (this.bossLight) {
+        this.bossLight.color.set(b.tint);
+        this.bossLight.intensity = 3.2;
+        this.bossLight.position.set(pos.x, this._bossLightY, pos.z);
+      }
     }
 
     // ---- spawn: scheletri si risvegliano, zombi risalgono dalla terra ----
@@ -189,18 +278,51 @@ export class Enemy {
     if (this.anim.currentPurpose !== purpose) this.anim.play(purpose, { timeScale: ts });
   }
 
-  takeDamage(dmg, dir, { crit = false, knock = 0 } = {}) {
+  // CO-OP client: il puppet segue la posizione/orientamento inviati dall'host (interpolati) e
+  // riproduce l'animazione indicata. Nessuna IA, nessuna collisione: è un "fantoccio" di rete.
+  setNet(x, z, ry, purpose) { this._npx = x; this._npz = z; this._nyaw = ry; this._npurpose = purpose; }
+  _puppetTick(dt) {
+    if (this._npx === undefined) return;
+    const k = 1 - Math.exp(-15 * dt);
+    this.root.position.x += (this._npx - this.root.position.x) * k;
+    this.root.position.z += (this._npz - this.root.position.z) * k;
+    this.root.position.y = 0;
+    let d = this._nyaw - this.root.rotation.y;
+    while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+    this.root.rotation.y += d * Math.min(1, 12 * dt);
+    const purpose = this._npurpose || this.def.anim || 'walk';
+    if (this.anim.currentPurpose !== purpose && this.anim.has(purpose)) this.anim.play(purpose, {});
+  }
+
+  takeDamage(dmg, dir, { crit = false, head = false, knock = 0 } = {}) {
+    // CO-OP client: il puppet NON applica il danno (l'host è autoritativo) → lo REPORTA all'host,
+    // con feedback locale immediato (sangue). La morte la conferma l'host togliendolo dallo snapshot.
+    if (this._puppet) {
+      const g = this.game;
+      if (g.coopReportHit) g.coopReportHit(this.id, dmg, { crit, head });
+      if (g.opt && g.opt.blood) {
+        const hy = head ? this.pos.y + this.headY : this.pos.y + (this.def.lowProfile ? 0.4 : 1.1);
+        g.effects.blood(_v1.set(this.pos.x, hy, this.pos.z), dir || _v2.set(0, 0, 1), head ? 20 : 10);
+      }
+      return true;
+    }
     if (this.dead || this.state === 'spawning' || this.state === 'dying') return false;
     this.hp -= dmg;
     const g = this.game;
     if (g.opt.blood) {
-      const hitPos = _v1.set(this.pos.x, this.pos.y + (this.def.lowProfile ? 0.4 : 1.1), this.pos.z);
-      g.effects.blood(hitPos, dir, crit ? 16 : 10);
+      // colpo alla testa: schizzo dall'ALTEZZA della testa (non dal torso) e più abbondante
+      const hy = head ? this.pos.y + this.headY : this.pos.y + (this.def.lowProfile ? 0.4 : 1.1);
+      const hitPos = _v1.set(this.pos.x, hy, this.pos.z);
+      g.effects.blood(hitPos, dir, head ? 22 : crit ? 16 : 10);
     }
-    if (g.opt.damage) g.effects.damageNumber(this.pos, String(Math.round(dmg)), '#ffd887', crit);
-    // impatto sul non morto: alterna a caso splat/gib + hit, pitch leggermente variato, volume
-    // medio-basso (più grave/forte sui critici). Le varianti del file le sceglie Audio.play.
-    Audio.playAt('zombie_hit', this.pos, g.playerPos(), { vol: crit ? 0.7 : 0.5, rate: crit ? 0.85 : 1, pitchVar: 0.1, volVar: 0.12 });
+    if (g.opt.damage) g.effects.damageNumber(this.pos, String(Math.round(dmg)), head ? '#ff5a4a' : '#ffd887', head || crit);
+    // audio: headshot ha un suono DEDICATO (crack del cranio); sennò impatto carnoso normale
+    // (splat/gib, pitch/volume variato, un filo più grave/forte sui critici).
+    if (head) {
+      Audio.playAt('headshot', this.pos, g.playerPos(), { vol: 0.85, pitchVar: 0.06, volVar: 0.08 });
+    } else {
+      Audio.playAt('zombie_hit', this.pos, g.playerPos(), { vol: crit ? 0.7 : 0.5, rate: crit ? 0.85 : 1, pitchVar: 0.1, volVar: 0.12 });
+    }
 
     if (!this.boss && knock > 0) {
       this.kb.addScaledVector(dir, knock * 0.6);
@@ -231,8 +353,13 @@ export class Enemy {
     Audio.playAt('zombie_death', this.pos, g.playerPos(), { vol: 1, pitchVar: 0.14, volVar: 0.18 });
     if (this.bossLight) this.bossLight.intensity = 0;
 
-    const d = this.anim.play('death', { once: true, fade: 0.12 });
-    this.deathAnimTime = d ?? 0.6;
+    // clip di morte, saltando la parte iniziale in piedi e accelerando (def.deathStartFrac/deathFit)
+    // così i comuni cadono in ginocchio subito. def.noDeathClip (brute motosega) → nessuna clip:
+    // crollo procedurale all'indietro (la sua unica clip è una cutscene di 15s con decapitazione).
+    const d = this.def.noDeathClip ? null : this.anim.play('death', {
+      once: true, fade: 0.12, startFrac: this.def.deathStartFrac || 0, fit: this.def.deathFit || 0,
+    });
+    this.deathAnimTime = d ?? 0.7;
     this.sinkDelay = this.deathAnimTime + 1.4;
     g.onEnemyKilled(this);
   }
@@ -242,6 +369,11 @@ export class Enemy {
     const g = this.game;
     this.anim.update(dt);
     this.stateTime += dt;
+    if (this._puppet) { this._puppetTick(dt); return; } // CO-OP client: mosso dalla rete, niente IA
+    // la luce del boss è nel pool (non figlia del root): segue il boss ogni frame
+    if (this.boss && this.bossLight && !this.dead) {
+      this.bossLight.position.set(this.pos.x, this.pos.y + this._bossLightY, this.pos.z);
+    }
 
     switch (this.state) {
       case 'spawning': {
@@ -285,9 +417,19 @@ export class Enemy {
           break;
         }
 
-        // steering: inseguimento + separazione
+        // steering: inseguimento CON FIANCHEGGIAMENTO + separazione. La direzione desiderata
+        // è quella verso il giocatore RUOTATA di this.flank, con peso che cresce con la
+        // distanza (lontano = aggira largo, sotto i ~5 m = converge dritto per l'attacco).
+        this.flankT -= dt;
+        if (this.flankT <= 0) this._rollFlank();
         let vx = toPlayer.x, vz = toPlayer.z;
-        if (this.def.ranged && dist < this.def.keepDistance) { vx = -vx * 0.6; vz = -vz * 0.6; }
+        if (this.flank) {
+          const k = this.flank * THREE.MathUtils.smoothstep(dist, 5, 19);
+          const ck = Math.cos(k), sk = Math.sin(k);
+          vx = toPlayer.x * ck - toPlayer.z * sk;
+          vz = toPlayer.x * sk + toPlayer.z * ck;
+        }
+        if (this.def.ranged && dist < this.def.keepDistance) { vx = -toPlayer.x * 0.6; vz = -toPlayer.z * 0.6; }
         let sx = 0, sz = 0;
         for (const e of enemies) {
           if (e === this || e.dead) continue;
@@ -312,8 +454,9 @@ export class Enemy {
         this.kb.multiplyScalar(Math.max(0, 1 - 7 * dt));
         resolveCollisions(this.pos, this.radius, g.colliders);
 
-        // orientamento verso la direzione di movimento / giocatore
-        const targetYaw = Math.atan2(toPlayer.x, toPlayer.z);
+        // orientamento verso la direzione di MOVIMENTO reale (flank/separazione/weave inclusi):
+        // chi aggira guarda dove cammina, non il giocatore in moonwalk laterale
+        const targetYaw = Math.atan2(vx, vz);
         let dy = targetYaw - this.root.rotation.y;
         while (dy > Math.PI) dy -= Math.PI * 2;
         while (dy < -Math.PI) dy += Math.PI * 2;
@@ -381,18 +524,20 @@ export class Enemy {
       }
 
       case 'dying': {
-        // senza clip di morte (es. walker Aiden, Hazmat) si ribalta all'indietro fino a stendersi
-        // PIATTO a terra: smoothstep = caduta morbida che "atterra", barcollio tenuto a zero.
-        if (this.procedural || !this.anim.has('death')) {
+        // senza clip di morte (procedurale, o brute con def.noDeathClip) si ribalta all'indietro fino
+        // a stendersi PIATTO a terra: smoothstep = caduta morbida che "atterra", barcollio a zero.
+        if (this.procedural || this.def.noDeathClip || !this.anim.has('death')) {
           this.model.rotation.z = 0;
           const t = Math.min(this.stateTime / 0.7, 1);
           const ease = t * t * (3 - 2 * t);
           // ribaltamento RELATIVO al corpo (model.rotation.x, sotto la rotazione di facing del root):
           // cade sempre supino qualunque sia la direzione in cui guardava, sollevamento coerente.
           this.model.rotation.x = -Math.PI / 2 * ease;
-          // alza il corpo mentre si stende così appoggia sul terreno (no compenetrazione);
-          // smetto al via dell'affondamento, sennò "combatterei" contro la discesa sottoterra.
-          if (this.stateTime <= this.sinkDelay) this.root.position.y = this._lieLift * ease;
+          // porta il corpo a terra mentre si stende: `_lieLift` evita che la schiena buchi il pavimento;
+          // `-_footLift` ABBASSA i modelli con origine NON ai piedi (brute motosega, origine al bacino),
+          // che sennò ruoterebbero attorno al bacino sospeso e "svolazzerebbero" in aria invece di cadere.
+          // Per gli zombi con origine ai piedi (_footLift≈0) resta il comportamento di prima.
+          if (this.stateTime <= this.sinkDelay) this.root.position.y = (this._lieLift - this._footLift) * ease;
         }
         if (this.stateTime > this.sinkDelay) {
           this.root.position.y -= dt * 0.7;
@@ -568,6 +713,7 @@ export class Enemy {
 
   dispose() {
     this.game.scene.remove(this.root);
+    if (this.boss && this.bossLight) this.bossLight.intensity = 0; // la luce del pool resta, si spegne
     for (const m of this.mats) m.mat.dispose();
   }
 }
@@ -794,6 +940,7 @@ export class WaveDirector {
   clear() {
     for (const e of this.enemies) e.dispose();
     this.enemies = [];
+    if (this.game.bossLight) this.game.bossLight.intensity = 0;
     for (const s of this.spits) this.game.scene.remove(s.mesh);
     this.spits = [];
     this.queue = [];

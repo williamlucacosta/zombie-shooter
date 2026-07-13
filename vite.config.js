@@ -5,7 +5,11 @@ import { resolve } from 'path';
 const cleanUrls = () => ({
   name: 'clean-dev-urls',
   configureServer(server) {
-    const map = { '/audios': '/audios.html', '/audios/': '/audios.html', '/models': '/models.html', '/models/': '/models.html' };
+    const map = {
+      '/audios': '/audios.html', '/audios/': '/audios.html',
+      '/models': '/models.html', '/models/': '/models.html',
+      '/aim-position': '/aim-position.html', '/aim-position/': '/aim-position.html',
+    };
     server.middlewares.use((req, _res, next) => {
       if (map[req.url]) req.url = map[req.url];
       next();
@@ -29,6 +33,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         audios: resolve(__dirname, 'audios.html'),
         models: resolve(__dirname, 'models.html'),
+        'aim-position': resolve(__dirname, 'aim-position.html'),
       },
     },
   },

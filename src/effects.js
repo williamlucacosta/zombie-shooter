@@ -172,7 +172,7 @@ export class Effects {
     this.tracers = [];
     // cilindro TONDO sottile (open-ended, niente tappi/spigoli) lungo +Z: una scia liscia, non una
     // "scatola". Sottile e con opacità bassa (vedi tracer()) = lampo di sparo discreto e realistico.
-    const trGeo = new THREE.CylinderGeometry(0.012, 0.012, 1, 7, 1, true).rotateX(Math.PI / 2);
+    const trGeo = new THREE.CylinderGeometry(0.009, 0.009, 1, 7, 1, true).rotateX(Math.PI / 2);
     for (let i = 0; i < 40; i++) {
       const m = new THREE.Mesh(trGeo, new THREE.MeshBasicMaterial({
         color: 0xffffff, transparent: true, opacity: 0,
@@ -181,7 +181,7 @@ export class Effects {
       m.visible = false;
       m.renderOrder = 10;
       scene.add(m);
-      this.tracers.push({ mesh: m, life: 0, maxLife: 0.07 });
+      this.tracers.push({ mesh: m, life: 0, maxLife: 0.05 });
     }
     this.tracerCursor = 0;
 
@@ -500,7 +500,7 @@ export class Effects {
     t.mesh.lookAt(to);
     t.mesh.scale.set(1, 1, Math.max(len, 0.1));
     t.mesh.material.color.set(colorHex);
-    t.mesh.material.opacity = 0.4; // discreto, non un lampo accecante
+    t.mesh.material.opacity = 0.26; // scintilla di partenza appena percettibile, non una scia
     t.mesh.visible = true;
     t.life = t.maxLife;
   }

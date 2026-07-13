@@ -62,15 +62,14 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
 - **Giocatore (soldato)**: "Vanguard" di T. Choonyung via [Adobe Mixamo](https://www.mixamo.com),
   ridistribuito negli esempi di [three.js](https://github.com/mrdoob/three.js) — three.js MIT,
   mesh Mixamo (royalty-free per uso commerciale)
-- **Zombi base (camminatore/corridore)**: **"Zombie Hazmat" di LxNazarov**
-  ([Sketchfab](https://sketchfab.com/3d-models/zombie-hazmat-49b3b4307f6a4d2386fdb02354158d04)) —
-  **CC BY 4.0** (attribuzione richiesta)
-- **Camminatore realistico**: **"Zombie (Rigged & Animated)" di Aiden Studios**
-  ([Sketchfab](https://sketchfab.com/3d-models/zombie-rigged-animated-131688807ad444609ed9b2ed572dc4aa)) —
-  **CC BY 4.0** (attribuzione richiesta). Scaricato via Download API ufficiale di Sketchfab.
-- **Corridore (9 animazioni: corsa/attacchi/morte/urlo)**: **"Zombie Fantasy Animated" di Larnox**
-  ([Sketchfab](https://sketchfab.com/3d-models/zombie-fantasy-animated-4e966d5df4e54260b69487919dbe7660)) —
-  **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
+- **Orda di zombi (camminatore/corridore/strisciante/brute)** — libreria coerente di
+  **temptecn (DanteGuy)** su [Sketchfab](https://sketchfab.com/temptecn), tutti **CC BY 4.0**
+  (attribuzione richiesta), stile horror uniforme, scaricati via Download API ufficiale:
+  - **Camminatore**: "Slow Zombie1 FPSC Pack" (11 animazioni)
+  - **Corridore**: "Putrid Zombie" (15 animazioni)
+  - **Strisciante**: "Crawling Zombie" (5 animazioni)
+  - **Brute / Boss**: "Chainsaw Brute FPSC Pack" (10 animazioni)
+  - **Evocatore (spitter/boss)**: riusa "Putrid Zombie"
 - **Pistola (viewmodel FPS animato: braccia+arma, ricariche tattica/completa)**:
   **"FPS pistol animations" (Springfield XD Mod.2) di Cransh**
   ([Sketchfab](https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d)) —
@@ -86,17 +85,36 @@ Pagina di sviluppo per provare i suoni: `http://localhost:3210/audios`.
   **"FPS Arms remington (shotgun)" di Cransh**
   ([Sketchfab](https://sketchfab.com/3d-models/fps-arms-remington-shotgun-e68ef617fe8a48cca8610d016ffd5881)) —
   **CC BY 4.0** (attribuzione richiesta). Idle/cammina/sparo/ricarica; la mano carica i pallettoni uno a uno.
-- **Brute / Boss (Mutant realistico, 13 animazioni di combattimento)**: "Mutant" di [Adobe Mixamo](https://www.mixamo.com)
-  (mesh + animazioni + texture creatura) — Mixamo royalty-free per uso commerciale. Crepe rese emissive nel gioco.
-- **Crawler (lupo che carica)**: **"Wolf with Animations" di 3DHaupt**
-  ([Sketchfab](https://sketchfab.com/3d-models/wolf-with-animations-f3769a474a714ebbbaca0d97f9b0a5a0)) —
-  **CC BY-NC 4.0** (attribuzione richiesta · **uso non commerciale**)
 - **Altri personaggi**: [Quaternius](https://quaternius.com) — Post-Apocalypse Pack
   (cane/hound; Big Arm e strisciante come ripieghi) via [poly.pizza](https://poly.pizza) — CC0
 - **Scheletri e scenografia cimitero**: [Kay Lousberg / KayKit](https://kaylousberg.com) —
   Skeletons Pack + Halloween Bits — CC0
-- **Texture terreno/zone (PBR realistiche)**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock,
-  forrest_ground_01, cobblestone_floor_08, rock_wall_10, weathered_planks (diffuse+normale+rugosità) — CC0
+- **Città abbandonata (relitti e arredo urbano, Sketchfab)** — tutti **CC BY 4.0** (attribuzione richiesta):
+  - **"Free Burned Police Cars" di kryik1023** ([Sketchfab](https://sketchfab.com/3d-models/free-burned-police-cars-ad16f7085cb047b494997cf9efed5059))
+  - **"Crashed Abandoned Car - Game Ready"** e **"Abandoned Generic Sedan 1 - Game Ready" di rashad-brahimli**
+    ([1](https://sketchfab.com/3d-models/crashed-abandoned-car-game-ready-66ef51a84c9843dda53bf0b4b9020011) ·
+    [2](https://sketchfab.com/3d-models/abandoned-generic-sedan-1-game-ready-6a2169dafc254f399387a679305bb1bf))
+  - **"Abandoned Car - BMW E30 Sedan"** e **"Abandoned Car - Hudson Hornet" di roh3d**
+    ([1](https://sketchfab.com/3d-models/abandoned-car-bmw-e30-sedan-32498418a32d43a78d0847ce4c55fcb0) ·
+    [2](https://sketchfab.com/3d-models/abandoned-car-hudson-hornet-3a15481d9da9486a8f8e3b5165b66e2d))
+  - **"destroyed Bus 01" di dadndan0091** ([Sketchfab](https://sketchfab.com/3d-models/destroyed-bus-01-fdf39ca893a64368af45f82a6b6d68a4))
+  - **"Rusty Streetlight" di barbodoji** ([Sketchfab](https://sketchfab.com/3d-models/rusty-streetlight-d75f8d8a26054e3584f55eb07644801a))
+  - **"dumpster" di YJ_** ([Sketchfab](https://sketchfab.com/3d-models/dumpster-989ea7f01b924859b3484ee27103e8d9))
+  - **"Jersey Barrier" di emran.bayati** ([Sketchfab](https://sketchfab.com/3d-models/jersey-barrier-b52246c9611a42a99a03b425535a0237))
+  - **"Ruined buildings pack - Free download" di tobiasherbers2** ([Sketchfab](https://sketchfab.com/3d-models/ruined-buildings-pack-free-download-690edb7d64b84df7bfeee3b54746d6eb))
+  - **"City Ruins Environment" di falk** ([Sketchfab](https://sketchfab.com/3d-models/city-ruins-environment-0d32be87779243749417ec783fb3ef60))
+  - **"New, Old, Crashed Helicopter" di Vasyukov_S** ([Sketchfab](https://sketchfab.com/3d-models/new-old-crashed-helicopter-0f801510406c452686d0f550add826cd))
+  - **"Barricade Sandbags LOD0" di fertator99** ([Sketchfab](https://sketchfab.com/3d-models/barricade-sandbags-lod0-18d348bd76004edd9a1c39155970382d))
+  - **"Watch Tower" di edminchi** ([Sketchfab](https://sketchfab.com/3d-models/watch-tower-d5ee8a573a474830b5d7ee9b3baa844d))
+  - **"A Pile Of Concrete Debris - 3D Scan" di albentan2012** ([Sketchfab](https://sketchfab.com/3d-models/a-pile-of-concrete-debris-3d-scan-194bec2429da4b74b3926ac981616da8))
+  - **"M725 Military Ambulance" di kryik1023** ([Sketchfab](https://sketchfab.com/3d-models/m725-military-ambulance-fbeafdb305114e4eb331d1b69d5fe094))
+  - **"Scots Pine Trees Set" di c3posw01** ([Sketchfab](https://sketchfab.com/3d-models/scots-pine-trees-set-422b961ff3d14e7baa7e9077572b2247)) — la foresta instanziata
+  - **"Wooden Cabin"** e **"Old Wooden Shed" di donnichols**
+    ([1](https://sketchfab.com/3d-models/wooden-cabin-c90674a377864ac1b8fd141ad1917ee3) ·
+    [2](https://sketchfab.com/3d-models/old-wooden-shed-761c0879b18041e1a42bc10de88d2228))
+- **Texture terreno/zone/città (PBR realistiche)**: [Poly Haven](https://polyhaven.com) — aerial_grass_rock,
+  forrest_ground_01, cobblestone_floor_08, rock_wall_10, weathered_planks, asphalt_02,
+  rectangular_paving, brick_wall_04, plastered_wall_04, concrete_panels (diffuse+normale+rugosità) — CC0
 - **Props ambientazione realistici (PBR)**: [Poly Haven](https://polyhaven.com) — dead_tree_trunk +
   dead_tree_trunk_02 (tronchi caduti), tree_stump_01, boulder_01, rock_07, rock_moss_set_01,
   wooden_lantern_01, marble_bust_01 — CC0. Lapidi, mausolei e plinti delle statue sono geometria

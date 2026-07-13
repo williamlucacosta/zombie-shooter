@@ -20,8 +20,9 @@ tools/_audiosrc/
 # modelli candidati in valutazione (staging, non committare)
 public/assets/models/_candidates/
 
-# backup degli asset originali pre-compressione (tools/compress-assets.mjs)
+# backup degli asset originali pre-compressione (tools/compress-assets.mjs) — cartelle _orig/ ovunque
 public/assets/_orig/
+public/assets/**/_orig/
 
 # download grezzi Sketchfab dei viewmodel arma (7-18 MB, ri-scaricabili con
 # tools/sketchfab-dl.mjs; i file di gioco gun_*.glb nascono da tools/sf-gun-clean.mjs)

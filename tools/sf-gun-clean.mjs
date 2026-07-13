@@ -5,7 +5,7 @@
 // Uso: node tools/sf-gun-clean.mjs
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { prune } from '@gltf-transform/functions';
+import { metalRough, prune } from '@gltf-transform/functions';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -36,7 +36,9 @@ for (const g of GUNS) {
       if (g.drop.test(mesh.getName())) { mesh.dispose(); dropped++; }
     }
   }
-  await doc.transform(prune());
+  // KHR_materials_pbrSpecularGlossiness (es. XD di Cransh) NON è supportata da three ->
+  // materiali bianchi senza texture in gioco: convertila in metallic-roughness core.
+  await doc.transform(metalRough(), prune());
   await io.write(join(MODELS, g.dst), doc);
   const anims = root.listAnimations().map((a) => a.getName()).join(', ');
   console.log(`OK ${g.dst}  (drop:${dropped})  clip: ${anims}`);

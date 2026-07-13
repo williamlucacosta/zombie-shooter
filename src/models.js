@@ -8,6 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { perturbSceneGeometry, VARIANT_PROFILES } from './assets.js';
 
 // Modelli ATTUALMENTE usati in gioco (baseline di confronto).
 const CURRENT = [
@@ -24,6 +25,13 @@ const CURRENT = [
 
 // Candidati NUOVI trovati dagli agent (popolato man mano). url relativo a public/.
 const CANDIDATES = [
+  // --- Varianti del WALKER (anteprima delle 3 varianti pre-bakate usate in gioco) ---
+  // stessa perturbazione geometria+colore del gioco (assets.perturbSceneGeometry), applicata al
+  // volo qui al caricamento → così le vedi senza avviare la partita.
+  { label: 'Walker — ORIGINALE', url: 'assets/models/sf/zombie_slow1.glb', role: 'Walker base', source: 'DanteGuy', license: 'CC-BY' },
+  { label: 'Walker — Variante 1 (tozzo)', url: 'assets/models/sf/zombie_slow1.glb', role: 'Walker variante', source: 'perturbato', license: '—', variantProfile: 0 },
+  { label: 'Walker — Variante 2 (emaciato)', url: 'assets/models/sf/zombie_slow1.glb', role: 'Walker variante', source: 'perturbato', license: '—', variantProfile: 1 },
+  { label: 'Walker — Variante 3 (deforme)', url: 'assets/models/sf/zombie_slow1.glb', role: 'Walker variante', source: 'perturbato', license: '—', variantProfile: 2 },
   // --- Player ---
   { label: 'Soldier ★ (Quaternius)', url: 'assets/models/_candidates/player/q_soldier.glb', role: 'Player', source: 'Quaternius · poly.pizza', license: 'CC-BY' },
   { label: 'Soldier realistico (three.js / Mixamo Vanguard)', url: 'assets/models/_candidates/player/soldier_threejs.glb', role: 'Player', source: 'three.js · Mixamo', license: 'MIT / Mixamo' },
@@ -223,6 +231,10 @@ function loadModel(entry, btn) {
     root.traverse((o) => {
       if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
     });
+    // [ANTEPRIMA VARIANTI] stessa perturbazione geometria+colore del gioco, prima di normalizzare
+    if (entry.variantProfile != null && VARIANT_PROFILES[entry.variantProfile]) {
+      try { perturbSceneGeometry(root, VARIANT_PROFILES[entry.variantProfile]); } catch (e) { console.warn('variante non applicata:', e); }
+    }
     // normalizza: altezza ~1.8, centrato su X/Z, piedi a y=0
     let box = new THREE.Box3().setFromObject(root);
     const size = box.getSize(new THREE.Vector3());

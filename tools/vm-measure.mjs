@@ -15,9 +15,9 @@ const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
 
 // [nome, file, gunRe, length, vmShift] — tenere allineato a MANIFEST.guns in src/assets.js
 const GUNS = [
-  ['pistol', 'public/assets/models/gun_pistol_xd.glb', /^material\b/i, 0.42, { x: -0.28, y: 0.07, z: 0.02 }],
-  ['smg', 'public/assets/models/gun_smg_mpa.glb', /material_45\d/i, 0.66, { x: -0.26, y: -0.08, z: 0.12 }],
-  ['magnum', 'public/assets/models/gun_magnum_revolver.glb', /revolver/i, 0.52, { x: -0.28, y: 0.06, z: 0.03 }],
+  ['pistol', 'public/assets/models/gun_pistol_xd.glb', /^material\b/i, 0.22, { x: -0.34, y: 0.04, z: -0.04 }],
+  ['smg', 'public/assets/models/gun_smg_mpa.glb', /material_45\d/i, 0.55, { x: -0.26, y: -0.14, z: -0.14 }],
+  ['magnum', 'public/assets/models/gun_magnum_revolver.glb', /revolver/i, 0.36, { x: -0.28, y: 0.05, z: 0 }],
   ['shotgun', 'public/assets/models/gun_shotgun_cransh.glb', /remington|12ge/i, 1.2, { y: -0.09 }],
 ];
 const VM = { x: 0.2, y: -0.19, fwd: 0.5 }; // globali (player.VM); vmShift si somma

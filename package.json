@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "n8ao": "^1.10.3",
+    "peerjs": "^1.5.5",
     "postprocessing": "^6.36.0",
     "three": "^0.169.0"
   },
